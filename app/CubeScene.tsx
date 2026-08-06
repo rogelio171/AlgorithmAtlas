@@ -3,11 +3,14 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { AlgorithmDefinition } from "./algorithmData";
+import { cubeVisualSignature } from "./cubeCache";
 import { graphEdges, type SimFrame } from "./simulation";
 
 type CubeBundle = {
   group: THREE.Group;
   body: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>;
+  label: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  visualSignature: string;
   target: THREE.Vector3;
   targetScale: THREE.Vector3;
   targetColor: THREE.Color;
@@ -55,9 +58,32 @@ function createCube(item: SimFrame["items"][number]) {
   const label = new THREE.Mesh(new THREE.PlaneGeometry(.72, .36), new THREE.MeshBasicMaterial({ map: labelTexture(item.label), transparent: true }));
   label.position.set(0, 0, .506); group.add(label);
   return {
-    group, body, target: new THREE.Vector3(),
+    group, body, label, visualSignature: cubeVisualSignature(item), target: new THREE.Vector3(),
     targetScale: new THREE.Vector3(1, 1, 1), targetColor: new THREE.Color(0x414868),
   };
+}
+
+function refreshCubeLabel(cube: CubeBundle, item: SimFrame["items"][number]) {
+  const nextSignature = cubeVisualSignature(item);
+  if (cube.visualSignature === nextSignature) return;
+  cube.label.material.map?.dispose();
+  cube.label.material.map = labelTexture(item.label);
+  cube.label.material.needsUpdate = true;
+  cube.visualSignature = nextSignature;
+}
+
+function disposeCube(cube: CubeBundle) {
+  cube.group.traverse(object => {
+    if (object instanceof THREE.Mesh) {
+      object.geometry.dispose();
+      object.material.map?.dispose();
+      object.material.dispose();
+    }
+    if (object instanceof THREE.LineSegments) {
+      object.geometry.dispose();
+      object.material.dispose();
+    }
+  });
 }
 
 function cubePosition(algorithm: AlgorithmDefinition, item: SimFrame["items"][number], index: number, count: number) {
@@ -163,7 +189,9 @@ export function CubeScene({ algorithm, frame, playing }: { algorithm: AlgorithmD
     rebuildLinks(current, algorithm, frame);
     const live = new Set(frame.items.map(item => item.id));
     for (const [id, cube] of current.cubes) {
-      if (!live.has(id)) { current.world.remove(cube.group); current.cubes.delete(id); }
+      if (!live.has(id)) {
+        current.world.remove(cube.group); disposeCube(cube); current.cubes.delete(id);
+      }
     }
     frame.items.forEach((item, index) => {
       let cube = current.cubes.get(item.id);
@@ -172,6 +200,7 @@ export function CubeScene({ algorithm, frame, playing }: { algorithm: AlgorithmD
         cube.group.position.copy(cubePosition(algorithm, item, index, frame.items.length)).add(new THREE.Vector3(0, -2, 0));
         current.world.add(cube.group); current.cubes.set(item.id, cube);
       }
+      refreshCubeLabel(cube, item);
       cube.target.copy(cubePosition(algorithm, item, index, frame.items.length));
       const active = frame.active.includes(item.id);
       const settled = frame.settled.includes(item.id);
