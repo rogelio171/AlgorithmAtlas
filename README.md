@@ -7,6 +7,8 @@ Phase 1 includes implementations in TypeScript, Python, Go, and Java. Choose an
 algorithm, language, input preset, and variant, then play or step through the
 simulation.
 
+**Live demo:** [rogelio171.github.io/AlgorithmAtlas](https://rogelio171.github.io/AlgorithmAtlas/)
+
 ![Algorithm Atlas desktop interface](algorithm-atlas-desktop.png)
 
 ## Phase 1 catalog
@@ -36,6 +38,16 @@ npm run dev
 ```
 
 Open the local URL printed by the development server.
+
+## GitHub Pages
+
+Every push to `main` runs `.github/workflows/pages.yml`, creates a static Vite
+build with the `/AlgorithmAtlas/` base path, and deploys the `out/` directory to
+GitHub Pages. You can verify that export locally with:
+
+```bash
+npm run build:pages
+```
 
 ## Verify
 

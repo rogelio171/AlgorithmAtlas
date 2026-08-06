@@ -54,7 +54,7 @@ function buildTrace(algorithm: AlgorithmDefinition, raw: string, variant: string
     frames.push(frame("The active range is empty; target not found.",a,[],a.map((_,i)=>i)));return frames;
   }
   if (algorithm.id === "bubble-sort") {
-    for(let end=a.length-1;end>0;end--) for(let i=0;i<end;i++){frames.push(frame("Compare adjacent values "+a[i]+" and "+a[i+1]+".",a,[i,i+1],a.map((_,k)=>k).filter(k>end)));if(a[i]>a[i+1]){[a[i],a[i+1]]=[a[i+1],a[i]];frames.push(frame("Swap the inversion.",a,[i,i+1],a.map((_,k)=>k).filter(k>end)));}}
+    for(let end=a.length-1;end>0;end--) for(let i=0;i<end;i++){frames.push(frame("Compare adjacent values "+a[i]+" and "+a[i+1]+".",a,[i,i+1],a.map((_,k)=>k).filter(k=>k>end)));if(a[i]>a[i+1]){[a[i],a[i+1]]=[a[i+1],a[i]];frames.push(frame("Swap the inversion.",a,[i,i+1],a.map((_,k)=>k).filter(k=>k>end)));}}
     frames.push(frame("Every position is sorted.",a,[],a.map((_,i)=>i)));return frames;
   }
   if (algorithm.id === "insertion-sort") {
@@ -66,7 +66,7 @@ function buildTrace(algorithm: AlgorithmDefinition, raw: string, variant: string
     frames.push(frame("Result: "+sorted.join(", ")+".",sorted,[],sorted.map((_,i)=>i)));return frames;
   }
   if (algorithm.structure === "tree") {
-    const vals=a;let order:number[]=[];
+    const vals=a;const order:number[]=[];
     const walk=(i:number)=>{if(i>=vals.length)return;if(variant==="Preorder")order.push(i);walk(i*2+1);if(variant==="Inorder")order.push(i);walk(i*2+2);if(variant==="Postorder")order.push(i);};
     if(algorithm.id==="tree-traversals"){walk(0);} else {let i=0;while(i<vals.length){order.push(i);if(vals[i]===parsed.target)break;i=parsed.target<vals[i]?i*2+1:i*2+2;}if(variant==="Insert"&&!vals.includes(parsed.target)){vals.push(parsed.target);order.push(vals.length-1);}if(variant==="Delete"){const d=vals.indexOf(parsed.target);if(d>=0)vals.splice(d,1);}}
     const seen:number[]=[];for(const i of order){seen.push(i);frames.push(frame("Visit node "+(vals[i] ?? parsed.target)+".",vals,[i],[...seen],{current:String(vals[i] ?? parsed.target),stack:seen.map(x=>String(vals[x]))}));}
@@ -104,12 +104,12 @@ function ThreeScene({algorithm,current}:{algorithm:AlgorithmDefinition;current:F
 }
 
 export default function AlgorithmLab(){
-  const [selected,setSelected]=useState("binary-search"),[category,setCategory]=useState("All"),[language,setLanguage]=useState<Language>("typescript"),[input,setInput]=useState(""),[variant,setVariant]=useState(""),[step,setStep]=useState(0),[playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1);
+  const initialAlgorithm=algorithms.find(a=>a.id==="binary-search") ?? algorithms[0];
+  const [selected,setSelected]=useState(initialAlgorithm.id),[category,setCategory]=useState("All"),[language,setLanguage]=useState<Language>("typescript"),[input,setInput]=useState(initialAlgorithm.defaultInput),[variant,setVariant]=useState(initialAlgorithm.variants?.[0]??""),[step,setStep]=useState(0),[playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1);
   const algorithm=algorithms.find(a=>a.id===selected) ?? algorithms[0];
-  useEffect(()=>{setInput(algorithm.defaultInput);setVariant(algorithm.variants?.[0]??"");setStep(0);setPlaying(false)},[algorithm]);
   const trace=useMemo(()=>buildTrace(algorithm,input,variant),[algorithm,input,variant]);const current=trace[Math.min(step,trace.length-1)];const source=getCode(algorithm.id,language);const activeLine=lineFor(step,source);
   useEffect(()=>{if(!playing)return;const timer=setTimeout(()=>{if(step>=trace.length-1)setPlaying(false);else setStep(s=>s+1)},900/speed);return()=>clearTimeout(timer)},[playing,step,trace.length,speed]);
-  const choose=(id:string)=>{setSelected(id);setStep(0)};const filtered=algorithms.filter(a=>category==="All"||a.category===category);
+  const choose=(id:string)=>{const next=algorithms.find(a=>a.id===id) ?? algorithms[0];setSelected(next.id);setInput(next.defaultInput);setVariant(next.variants?.[0]??"");setStep(0);setPlaying(false)};const filtered=algorithms.filter(a=>category==="All"||a.category===category);
   return <main className="app-shell">
     <header className="topbar"><div className="brand"><span className="brand-mark">A.</span><div><strong>Algorithm Atlas</strong><small>Phase 01 · Interactive systems</small></div></div><div className="header-meta"><span><i/> Four languages</span><span>13 lessons</span><button onClick={()=>{setStep(0);setPlaying(true)}}>Start lesson</button></div></header>
     <section className="hero"><div><p className="eyebrow">UNDERSTAND THE MOTION, NOT JUST THE OUTPUT</p><h1>Watch code <em>become</em> an algorithm.</h1><p>Step through every comparison, mutation, queue, branch, and recursive call—then switch languages without losing your place.</p></div><div className="hero-stats"><div><b>13</b><span>algorithms</span></div><div><b>04</b><span>languages</span></div><div><b>∞</b><span>replays</span></div></div></section>
