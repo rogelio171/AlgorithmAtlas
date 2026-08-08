@@ -6,7 +6,7 @@ import { buildSimulation } from "./simulation";
 import { CubeScene } from "./CubeScene";
 import { SyntaxCode } from "./SyntaxCode";
 
-const initial = algorithms.find(algorithm => algorithm.id === "binary-search") ?? algorithms[0];
+const initial = algorithms[0];
 
 export default function AlgorithmLab() {
   const [selected, setSelected] = useState(initial.id);

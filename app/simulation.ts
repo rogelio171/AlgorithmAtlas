@@ -68,13 +68,13 @@ function linearTrace(raw: string) {
   const ruledOut: string[] = [];
   for (let index = 0; index < values.length; index++) {
     const id = items[index].id;
-    frames.push(snapshot(items, `Inspect ${values[index]}.`, `Compare index ${index} with ${target}.`, "inspect", "Compare", [id], [], ruledOut, { pointers: { cursor: id } }));
+    frames.push(snapshot(items, `Inspect ${values[index]}.`, `Compare index ${index} with ${target}.`, "compare", "Compare", [id], [], ruledOut, { pointers: { cursor: id } }));
     if (values[index] === target) {
       frames.push(snapshot(items, `Found ${target}.`, `Return index ${index}.`, "match", "Match", [id], [id], ruledOut));
       return frames;
     }
     ruledOut.push(id);
-    frames.push(snapshot(items, `${values[index]} is not the target.`, "Advance one cube.", "compare", "Advance", [], [], ruledOut));
+    frames.push(snapshot(items, `${values[index]} is not the target.`, "Advance one cube.", "advance", "Advance", [], [], ruledOut));
   }
   frames.push(snapshot(items, `${target} is not present.`, "Every cube is ruled out.", "missing", "Complete", [], [], items.map(item => item.id)));
   return frames;
@@ -89,7 +89,7 @@ function binaryTrace(raw: string) {
   while (low <= high) {
     const middle = Math.floor((low + high) / 2);
     const outside = items.filter((_, i) => i < low || i > high).map(item => item.id);
-    frames.push(snapshot(items, `Probe the midpoint: ${values[middle]}.`, `Active indices ${low}–${high}.`, "inspect", "Probe", [items[middle].id], [], outside, { pointers: { low: items[low].id, mid: items[middle].id, high: items[high].id } }));
+    frames.push(snapshot(items, `Probe the midpoint: ${values[middle]}.`, `Active indices ${low}–${high}.`, "probe", "Probe", [items[middle].id], [], outside, { pointers: { low: items[low].id, mid: items[middle].id, high: items[high].id } }));
     if (values[middle] === target) {
       frames.push(snapshot(items, `Found ${target}.`, `Return index ${middle}.`, "match", "Match", [items[middle].id], [items[middle].id], outside));
       return frames;
@@ -196,8 +196,10 @@ function treeTrace(algorithm: AlgorithmDefinition, raw: string, variant: string)
   const items = values.map((value, slot) => ({ id: `node-${slot}`, label: String(value), value, slot }));
   const frames = [snapshot(items, "Place the root cube.", "Children branch into the next level.", "setup", "Initialize")];
   const order: number[] = [];
+  const mode = variant.toLowerCase();
+  const visitKey = algorithm.id !== "tree-traversals" ? "visit"
+    : mode.startsWith("pre") ? "visit-pre" : mode.startsWith("post") ? "visit-post" : "visit-in";
   if (algorithm.id === "tree-traversals") {
-    const mode = variant.toLowerCase();
     const walk = (slot: number) => {
       if (slot >= items.length) return;
       if (mode.startsWith("pre")) order.push(slot);
@@ -223,7 +225,7 @@ function treeTrace(algorithm: AlgorithmDefinition, raw: string, variant: string)
     const detail = algorithm.id === "bst-operations"
       ? `Compare with ${target}, then choose the ${branch} branch.`
       : `${variant} traversal emits this cube now.`;
-    frames.push(snapshot(items, `Visit node ${item.label}.`, detail, "visit", "Visit", [item.id], visited, [], {
+    frames.push(snapshot(items, `Visit node ${item.label}.`, detail, visitKey, "Visit", [item.id], visited, [], {
       visited: visited.map(id => items.find(candidate => candidate.id === id)?.label ?? id),
       pointers: { current: item.id },
     }));
@@ -272,7 +274,7 @@ function dijkstraTrace(items: CubeItem[], start: string, frames: SimFrame[]) {
       frames.push(snapshot(items, `Test ${node} → ${next} (${weight}).`, `Candidate distance: ${candidate}.`, "relax", "Relax edge", [node, next], [...settled], [], { distances: { ...distances }, visited: [...settled] }));
       if (candidate < distances[next]) {
         distances[next] = candidate;
-        frames.push(snapshot(items, `Update ${next} to ${candidate}.`, "A shorter path has been found.", "relax", "Update distance", [next], [...settled], [], { distances: { ...distances }, visited: [...settled] }));
+        frames.push(snapshot(items, `Update ${next} to ${candidate}.`, "A shorter path has been found.", "update", "Update distance", [next], [...settled], [], { distances: { ...distances }, visited: [...settled] }));
       }
     }
   }

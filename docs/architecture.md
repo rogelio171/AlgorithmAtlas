@@ -8,14 +8,18 @@ AlgorithmAtlas/
 │   ├── layout.tsx              Root layout, <html>/<body>, metadata + OG/Twitter tags
 │   ├── page.tsx                Server component that renders <AlgorithmLab/>
 │   ├── AlgorithmLab.tsx        "use client" — all UI state and layout
-│   ├── algorithmData.ts        Catalog of 13 algorithms + compact per-language snippets
+│   ├── algorithmData.ts        Catalog of 13 algorithm definitions
 │   ├── simulation.ts           Trace builders: AlgorithmDefinition + input → SimFrame[]
 │   ├── CubeScene.tsx           Three.js renderer, driven by the current SimFrame
 │   ├── SyntaxCode.tsx          Regex tokenizer + highlighted <pre> listing
-│   ├── codeSamples.ts          Resolves a CodeSample: curated first, formatter fallback
+│   ├── codeSamples.ts          Merges and compiles the curated samples
 │   ├── code/
 │   │   ├── sample.ts           CodeSample type + §marker§ compiler
-│   │   └── search.ts           Curated, marker-annotated samples (linear + binary search)
+│   │   ├── search.ts           Marker-annotated samples: searching
+│   │   ├── sorting.ts          Marker-annotated samples: sorting
+│   │   ├── trees.ts            Marker-annotated samples: trees
+│   │   ├── graphs.ts           Marker-annotated samples: graphs
+│   │   └── recursion.ts        Marker-annotated samples: recursion
 │   ├── cubeCache.ts            Cube visual signature used to invalidate label textures
 │   ├── chatgpt-auth.ts         Dormant ChatGPT header auth helpers
 │   └── globals.css             The entire visual system
@@ -45,12 +49,11 @@ AlgorithmAtlas/
 ```
 page.tsx
   └─ AlgorithmLab.tsx ("use client")
-       ├─ algorithmData.ts ── algorithms[], categories, languages, getCode()
+       ├─ algorithmData.ts ── algorithms[], categories, languages
        ├─ simulation.ts ───── buildSimulation() → SimFrame[]   (imports AlgorithmDefinition)
        ├─ codeSamples.ts ──── getCodeSample()  → CodeSample
-       │    ├─ code/search.ts (curated §marker§ sources)
-       │    ├─ code/sample.ts (compileSample)
-       │    └─ algorithmData.ts (getCode fallback)
+       │    ├─ code/{search,sorting,trees,graphs,recursion}.ts (§marker§ sources)
+       │    └─ code/sample.ts (compileSample)
        ├─ CubeScene.tsx ───── Three.js; imports graphEdges + SimFrame from simulation.ts
        │    └─ cubeCache.ts  (cubeVisualSignature)
        └─ SyntaxCode.tsx ──── tokenizer; imports Language + CodeSample types
@@ -97,10 +100,12 @@ is what actually ships to the public demo.
 
 ## Design decisions worth knowing
 
-- **Simulations are data, not execution.** Nothing in `app/code/` or the
-  `snippets` map is ever evaluated. The displayed source is illustrative; the
-  behaviour comes from separate hand-written trace builders in `simulation.ts`.
-  Keeping the two in sync is a manual responsibility.
+- **Simulations are data, not execution.** Nothing in `app/code/` is ever
+  evaluated. The displayed source is illustrative; the behaviour comes from
+  separate hand-written trace builders in `simulation.ts`. The samples are
+  written to mirror the builders line for line, and
+  `tests/code-sync.test.mjs` enforces the contract: every `codeKey` a builder
+  emits must resolve to explicit lines in all four languages.
 - **Frames are immutable snapshots.** `snapshot()` deep-copies `items` and
   copies the `active`/`settled`/`dimmed` arrays, so trace builders are free to
   mutate their working array in place (bubble sort literally swaps elements).

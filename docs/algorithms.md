@@ -108,9 +108,6 @@ These are deliberate scope choices, documented so they are not mistaken for bugs
   settles every reachable node rather than stopping at `F`.
 - **Fibonacci is truncated.** The call expansion stops after 16 frames, so large
   `n` shows a representative slice of the recursion tree, not the whole thing.
-- **Merge sort's Java snippet references a `merge` helper** that is not shown in
-  the listing — the compact snippets prioritise the shape of the algorithm over
-  being copy-paste-compilable.
 - **Tree input is level-order into a perfect-shape array.** Feeding values that
   do not form a valid BST will render a tree, but the BST comparison walk will
   behave accordingly.

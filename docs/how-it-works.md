@@ -69,12 +69,12 @@ six array algorithms, then by `algorithm.structure` for the rest:
 
 ### What each builder emits
 
-- **Linear search** — one `inspect` frame per index carrying `pointers.cursor`,
-  then either a `match` frame or a `compare` frame (phase "Advance") that pushes
-  the index onto the ruled-out (dimmed) list.
-- **Binary search** — an `inspect` frame (phase "Probe") carrying
-  `pointers.low/mid/high` and dimming everything outside `[low, high]`, then a
-  `discard` frame after the interval narrows.
+- **Linear search** — one `compare` frame per index carrying `pointers.cursor`
+  (the `if` comparison), then either a `match` frame or an `advance` frame (back
+  to the loop line) that pushes the index onto the ruled-out (dimmed) list.
+- **Binary search** — a `probe` frame carrying `pointers.low/mid/high` and
+  dimming everything outside `[low, high]`, then a `discard` frame after the
+  interval narrows.
 - **Bubble sort** — `compare` for every adjacent pair, `swap` when inverted
   (the working array is mutated so the cubes physically trade slots), and a
   `pass` frame that marks the suffix settled.
@@ -197,44 +197,33 @@ instead of showing stale numbers — the behaviour covered by
 
 ## 3. The code panel
 
-### Two sources of truth
+### One curated source of truth
 
-`getCodeSample(id, language)` resolves in two tiers:
-
-**Tier 1 — curated samples (`app/code/search.ts`).** Readable, properly
-formatted source annotated with inline markers:
+Every algorithm is hand-annotated in all four languages. Samples live in
+category modules under `app/code/` — `search.ts`, `sorting.ts`, `trees.ts`,
+`graphs.ts`, `recursion.ts` — as readable, properly formatted source with
+inline markers:
 
 ```
 §setup§function binarySearch(values: number[], target: number): number {
-  let low = 0;
-  let high = values.length - 1;
-§inspect§  while (low <= high) {
+§setup§  let low = 0;
+§setup§  let high = values.length - 1;
+  while (low <= high) {
+§probe§    const middle = Math.floor((low + high) / 2);
 ```
 
 `compileSample()` (`app/code/sample.ts`) strips each `§key,key§` prefix,
 preserves the leading indentation, and records the 1-based line number under
 every key it names. The result is a `CodeSample { code, highlights }` where
-`highlights` maps a `codeKey` to the exact lines to light up. Currently
-`linear-search` and `binary-search` are curated in all four languages.
+`highlights` maps a `codeKey` to the exact lines to light up.
+`app/codeSamples.ts` merges the category modules and compiles them once at
+module load.
 
-**Tier 2 — compact snippets + inference (`app/algorithmData.ts`).** Every other
-algorithm stores a minified one-liner-ish snippet per language. Those go
-through:
-
-1. `formatBraced()` for TypeScript/Go/Java — a small character-level formatter
-   that tracks quotes and paren depth, breaks on top-level `{`, `}`, and `;`,
-   maintains indentation, and re-joins `} else`.
-2. `formatPython()` for Python — splits on `;`, re-indents, and expands
-   `if x:body` into two lines.
-3. `cleanLine()` normalizes spacing (`if(` → `if (`, `,x` → `, x`, spaces
-   around `=` but not `==`/`=>`).
-4. `inferHighlights()` matches ~25 regex cue groups (`setup`, `compare`, `swap`,
-   `pivot`, `relax`, `base`, …) against the formatted lines and returns the
-   matching line numbers, defaulting to `[1]` when nothing matches.
-
-Tier 2 is a heuristic. It keeps every algorithm usable without hand-authoring
-52 samples, but the highlighted line is approximate — migrating an algorithm to
-tier 1 is the way to make it exact.
+The samples are written to mirror the trace builders line for line — the DFS
+sample includes the neighbour reversal the simulation performs, tree traversal
+emits distinct `visit-pre` / `visit-in` / `visit-post` keys so each variant
+highlights its own emit line, and Dijkstra separates `relax` (computing a
+candidate distance) from `update` (an improvement actually written).
 
 ### Highlight lookup
 
@@ -245,7 +234,9 @@ const activeLines = sample.highlights[current.codeKey] ?? sample.highlights.setu
 The frame's `codeKey` is the join between the two systems: `simulation.ts`
 labels each frame (`"compare"`, `"discard"`, `"relax"`…), and the sample
 provides the lines for that label. A missing key degrades to the `setup` lines,
-then to line 1.
+then to line 1 — but `tests/code-sync.test.mjs` fails the build of any frame
+whose `codeKey` has no explicit lines, so the fallback should never fire in
+practice.
 
 ### Tokenizing (`app/SyntaxCode.tsx`)
 

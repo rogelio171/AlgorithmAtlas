@@ -59,7 +59,8 @@ npm test
 ## Project structure
 
 - `app/AlgorithmLab.tsx`: interactive lab and Three.js renderer
-- `app/algorithmData.ts`: catalog and four-language code samples
+- `app/algorithmData.ts`: algorithm catalog
+- `app/code/`: marker-annotated four-language code samples
 - `app/globals.css`: responsive visual design
 - `tests/rendered-html.test.mjs`: production-render smoke test
 

@@ -58,15 +58,21 @@ Imports `app/cubeCache.ts`, `app/algorithmData.ts`, and `app/simulation.ts`
 changed label produces a different visual signature, that an unchanged one stays
 stable, and that editing the input rebuilds the simulation's cube labels.
 
-> **Note:** this suite is not part of the `npm test` script. Run it explicitly:
+### `tests/code-sync.test.mjs` — the debugger contract
+
+Also imports the app's TypeScript directly. For every algorithm × preset ×
+variant, it builds the full simulation and asserts that every emitted
+`codeKey` resolves to explicit, in-range highlight lines in all four
+languages — so a step can never point at the wrong (or no) source line. It
+also pins the default exercise to the first catalog entry and checks no `§`
+marker leaks into rendered code.
+
+> **Note:** the two pure-TS suites are not part of the `npm test` script. Run
+> them explicitly:
 >
 > ```bash
-> node --test tests/cube-cache.test.mjs
-> # or run both suites:
-> node --test tests/
+> node --test tests/cube-cache.test.mjs tests/code-sync.test.mjs
 > ```
->
-> On Node 22.x you may need `node --experimental-strip-types --test tests/`.
 
 ## Linting
 
@@ -125,7 +131,5 @@ The existing code has a distinctive, deliberately compact style. Match it:
 
 - `react-loading-skeleton` is a dependency but unused.
 - Tailwind is registered in PostCSS but never imported by `globals.css`.
-- `tests/cube-cache.test.mjs` is not wired into `npm test`.
-- Curated, marker-annotated code samples exist only for linear and binary
-  search; the other eleven algorithms rely on the formatter + regex heuristic
-  described in [`how-it-works.md`](./how-it-works.md).
+- `tests/cube-cache.test.mjs` and `tests/code-sync.test.mjs` are not wired
+  into `npm test`.

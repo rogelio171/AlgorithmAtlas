@@ -33,10 +33,8 @@ algorithms.push({
 
 ## Step 2 — Code samples
 
-### Option A (preferred) — curated, marker-annotated
-
-Create `app/code/sorting.ts` (or extend an existing module) using the `§key§`
-marker syntax:
+Extend the category module under `app/code/` (`sorting.ts` here), using the
+`§key§` marker syntax:
 
 ```ts
 import type { RawSamples } from "./sample";
@@ -66,22 +64,18 @@ Rules:
 - One marker per line, at the very start of the line's content (leading
   indentation is preserved, the marker is stripped).
 - A marker may name several keys: `§compare,inspect§`.
-- The keys must match the `codeKey` values your trace builder emits.
+- The keys must match the `codeKey` values your trace builder emits —
+  `tests/code-sync.test.mjs` fails if any emitted key has no lines.
 - All four languages are required — `RawSamples` is `Record<string, Record<Language, string>>`.
+- Write the code so it does exactly what the trace builder simulates, in the
+  same order — the highlight is only honest if the source is.
 
-Then register the module in `app/codeSamples.ts`, merging it into the `search`
-lookup (or a new one) that is checked before the fallback:
+If you create a brand-new module instead of extending one, register it in the
+`sources` spread in `app/codeSamples.ts`:
 
 ```ts
-const curated = { ...searchSamples, ...sortingSamples };
+const sources = { ...searchSamples, ...sortingSamples, /* ..., */ ...newSamples };
 ```
-
-### Option B — compact snippet + inference
-
-Add `snippets["selection-sort"]` entries in `algorithmData.ts` for all four
-languages. `getCodeSample` will format them and infer highlights from the regex
-cue table. Faster to write, less precise highlighting. Add a cue pattern to the
-`cues` map in `codeSamples.ts` if your builder emits a `codeKey` that has none.
 
 ## Step 3 — Trace builder (`app/simulation.ts`)
 
@@ -154,8 +148,12 @@ independent of ordering, the way the tree layout does.
 ```bash
 npm run lint
 npm test
-node --test tests/cube-cache.test.mjs
+node --test tests/cube-cache.test.mjs tests/code-sync.test.mjs
 ```
+
+The code-sync suite is the important one here: it simulates every preset and
+variant of your new algorithm and fails if any step's `codeKey` lacks explicit
+highlight lines in any language.
 
 Then check by hand in `npm run dev`:
 

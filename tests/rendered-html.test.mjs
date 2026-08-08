@@ -21,7 +21,7 @@ test("server-renders the algorithm laboratory", async () => {
   assert.match(html, /Binary search/);
   assert.match(html, /typescript source code/);
   assert.match(html, /tok-keyword/);
-  assert.match(html, /Three-dimensional Binary search simulation/);
+  assert.match(html, /Three-dimensional Linear search simulation/);
 });
 
 test("keeps simulation, highlighting, and responsive motion in source", async () => {
