@@ -63,6 +63,18 @@ npm test
 - `app/globals.css`: responsive visual design
 - `tests/rendered-html.test.mjs`: production-render smoke test
 
+## Documentation
+
+Full documentation lives in [`docs/`](docs/README.md):
+
+- [Tech stack](docs/tech-stack.md) — every dependency and what it is actually used for
+- [Architecture](docs/architecture.md) — layout, module graph, data flow, build targets
+- [How it works](docs/how-it-works.md) — simulation engine, 3D renderer, code highlighting
+- [Algorithm catalog](docs/algorithms.md) — inputs, presets, variants, complexity
+- [Development](docs/development.md) — scripts, tests, linting, conventions
+- [Deployment](docs/deployment.md) — GitHub Pages and the Cloudflare Worker path
+- [Adding an algorithm](docs/adding-an-algorithm.md) — step-by-step recipe
+
 ## License
 
 MIT
