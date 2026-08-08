@@ -99,45 +99,48 @@ export const sortingSamples: RawSamples = {
   "merge-sort": {
     typescript: `
 §setup§function mergeSort(values: number[]): number[] {
-  if (values.length < 2) return values;
+§base§  if (values.length < 2) return values;
 §split§  const middle = Math.floor(values.length / 2);
 §split§  const left = mergeSort(values.slice(0, middle));
 §split§  const right = mergeSort(values.slice(middle));
   const merged: number[] = [];
   while (left.length && right.length) {
-§compare§    merged.push(left[0] <= right[0] ? left.shift()! : right.shift()!);
+§compare§    const takeLeft = left[0] <= right[0];
+§merge§    merged.push(takeLeft ? left.shift()! : right.shift()!);
   }
 §merge§  merged.push(...left, ...right);
 §done§  return merged;
 }`,
     python: `
 §setup§def merge_sort(values):
-    if len(values) < 2:
-        return values
+§base§    if len(values) < 2:
+§base§        return values
 §split§    middle = len(values) // 2
 §split§    left = merge_sort(values[:middle])
 §split§    right = merge_sort(values[middle:])
     merged = []
     while left and right:
-§compare§        merged.append(left.pop(0) if left[0] <= right[0] else right.pop(0))
+§compare§        take_left = left[0] <= right[0]
+§merge§        merged.append(left.pop(0) if take_left else right.pop(0))
 §merge§    merged.extend(left + right)
 §done§    return merged`,
     go: `
 §setup§func mergeSort(values []int) []int {
-    if len(values) < 2 {
-        return values
+§base§    if len(values) < 2 {
+§base§        return values
     }
 §split§    middle := len(values) / 2
 §split§    left := mergeSort(append([]int{}, values[:middle]...))
 §split§    right := mergeSort(append([]int{}, values[middle:]...))
     merged := []int{}
     for len(left) > 0 && len(right) > 0 {
-§compare§        if left[0] <= right[0] {
-            merged = append(merged, left[0])
-            left = left[1:]
+§compare§        takeLeft := left[0] <= right[0]
+§merge§        if takeLeft {
+§merge§            merged = append(merged, left[0])
+§merge§            left = left[1:]
         } else {
-            merged = append(merged, right[0])
-            right = right[1:]
+§merge§            merged = append(merged, right[0])
+§merge§            right = right[1:]
         }
     }
 §merge§    merged = append(merged, left...)
@@ -146,13 +149,14 @@ export const sortingSamples: RawSamples = {
 }`,
     java: `
 §setup§static List<Integer> mergeSort(List<Integer> values) {
-    if (values.size() < 2) return values;
+§base§    if (values.size() < 2) return values;
 §split§    int middle = values.size() / 2;
 §split§    List<Integer> left = mergeSort(new ArrayList<>(values.subList(0, middle)));
 §split§    List<Integer> right = mergeSort(new ArrayList<>(values.subList(middle, values.size())));
     List<Integer> merged = new ArrayList<>();
     while (!left.isEmpty() && !right.isEmpty()) {
-§compare§        merged.add(left.get(0) <= right.get(0) ? left.remove(0) : right.remove(0));
+§compare§        boolean takeLeft = left.get(0) <= right.get(0);
+§merge§        merged.add(takeLeft ? left.remove(0) : right.remove(0));
     }
 §merge§    merged.addAll(left);
 §merge§    merged.addAll(right);

@@ -155,6 +155,8 @@ export default function AlgorithmLab() {
           {current.pointers && <p><span>POINTERS</span>{Object.keys(current.pointers).join(" · ")}</p>}
           {current.frontier && <p><span>FRONTIER</span>{current.frontier.join(" · ") || "empty"}</p>}
           {current.visited && <p><span>VISITED</span>{current.visited.join(" · ") || "none"}</p>}
+          {current.distances && <p><span>DISTANCES</span>{Object.entries(current.distances).map(([node, value]) => `${node} ${Number.isFinite(value) ? value : "∞"}`).join(" · ")}</p>}
+          {current.path && current.path.length > 1 && <p><span>SHORTEST PATH</span>{current.path.join(" → ")}</p>}
           <p><span>INVARIANT</span>{algorithm.insight}</p>
         </div>
       </aside>

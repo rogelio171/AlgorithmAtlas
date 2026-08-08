@@ -10,7 +10,12 @@ the **code panel**. They share one contract — the `SimFrame`.
 ### The frame contract
 
 ```ts
-type CubeItem = { id: string; label: string; value?: number; slot?: number };
+type CubeItem = {
+  id: string; label: string; value?: number;
+  slot?: number;                     // tree position (implicit heap index)
+  lane?: number; col?: number;       // divide-and-conquer row / column
+  badge?: string;                    // corner annotation (distance, visit order)
+};
 
 type SimFrame = {
   items:    CubeItem[];              // every cube present in this frame, in slot order
@@ -25,6 +30,8 @@ type SimFrame = {
   frontier?: string[];               // queue/stack/call-stack contents
   visited?:  string[];
   distances?: Record<string, number>;
+  path?:     string[];               // result path; its edges render highlighted
+  lanes?:    number;                 // trace-wide lane count, for stable sizing
 };
 ```
 
@@ -80,9 +87,12 @@ six array algorithms, then by `algorithm.structure` for the rest:
   `pass` frame that marks the suffix settled.
 - **Insertion sort** — `select` lifts the key, `shift` for each larger element,
   then a `splice`-based `insert` and a growing settled prefix.
-- **Merge sort** — recursive `split` frames, `compare` frames for each merge
-  decision, and a `merge` frame after `items.splice(start, end - start, ...merged)`
-  writes the ordered run back into the shared array.
+- **Merge sort** — the runs physically separate. Each cube carries a `lane`
+  (recursion depth) and a `col`; a `split` frame pushes both halves one lane
+  deeper with a small gap between them, `base` calls out single-value runs, and
+  merging is step-by-step: a `compare` frame for the two run fronts, then a
+  `merge` frame as the winner is lifted back up into the parent lane. A final
+  `merge` frame marks the whole run sorted before it is handed upward.
 - **Quick sort** — Lomuto partitioning: `pivot`, per-element `compare`,
   `partition` on a swap, then `recurse` when the pivot lands in its final slot
   (marked settled immediately, because it is).
@@ -92,9 +102,14 @@ six array algorithms, then by `algorithm.structure` for the rest:
 - **Graph** — a fixed 6-node graph. BFS `shift()`s the frontier, DFS `pop()`s it
   and reverses the neighbour order so the visual order reads naturally. Each
   frame carries the live `frontier` and `visited` arrays.
-- **Dijkstra** — repeatedly settles the closest unsettled node, then emits a
-  `relax` frame per outgoing edge plus an extra frame whenever a distance
-  actually improves. `distances` rides along on every frame.
+- **Dijkstra** — answers a specific question: the shortest path from `start`
+  to `end` (both come from the input, e.g. `A | F`). It settles the closest
+  unsettled node, emits a `relax` frame per outgoing edge and an `update` frame
+  whenever a distance improves, and records a predecessor for each improvement.
+  Once the target settles it stops, then walks the predecessor chain backwards
+  with one `path` frame per hop and ends on a `done` frame carrying the full
+  path and its total distance. Every cube wears its current best distance as a
+  badge, and `distances`/`path` ride along on the frames.
 - **Recursion** — factorial pushes a `f(n)` cube per call down to the base case,
   then unwinds multiplying as it pops. Fibonacci expands an explicit call list
   and is **capped at 16 frames** so the exponential tree stays watchable.
@@ -109,8 +124,8 @@ graphEdges = [
 ```
 
 Undirected — `adjacency` is built by inserting each edge in both directions.
-Graph inputs only choose the **start** node; the `end` value parsed from
-`"A | F"` is not used to terminate Dijkstra, which settles every reachable node.
+BFS and DFS use only the **start** node. Dijkstra uses both: `"A | F"` asks for
+the shortest path from `A` to `F`, and the trace stops once `F` is settled.
 
 ---
 
@@ -139,6 +154,7 @@ recomputed on resize.
 | Structure | Placement |
 | --- | --- |
 | `array` | A centred row at `y = 190`, pitch `66` |
+| `array` + lanes | Divide-and-conquer tree: row `y` from the trace-wide `lanes` count, `x` from `col` |
 | `tree` | Level `floor(log2(slot+1))`; width halves each level from `560`; `y = 70 + level × 84` |
 | `graph` | Fixed hand-tuned coordinates in `graphPositions` (A–F) |
 | `recursion` | A stack growing upward from `y = 320`, pitch capped at `44` |
@@ -268,6 +284,10 @@ in `activeLines` get `.active` — a yellow left border and a gradient wash.
 | POINTERS row | `Object.keys(frame.pointers)` |
 | FRONTIER row | `frame.frontier` (queue, stack, or call stack) |
 | VISITED row | `frame.visited` |
+| DISTANCES row | `frame.distances` (Dijkstra) |
+| SHORTEST PATH row | `frame.path` (Dijkstra) |
+| Cube corner badge | `item.badge` — a Dijkstra distance or a BFS/DFS visit number |
+| Thick green edges | consecutive pairs in `frame.path` |
 | INVARIANT row | `algorithm.insight` (static per algorithm) |
 | TIME / SPACE badges | `algorithm.time` / `algorithm.space` |
 | Code filename | `algorithm.id` with `-` → `_`, plus a per-language extension |

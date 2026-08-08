@@ -133,36 +133,53 @@ export const graphSamples: RawSamples = {
   },
   dijkstra: {
     typescript: `
-§setup§function dijkstra(graph: WeightedGraph, start: string): Map<string, number> {
+§setup§function shortestPath(graph: WeightedGraph, start: string, target: string): string[] {
 §setup§  const distance = new Map(graph.nodes.map(node => [node, Infinity]));
+§setup§  const previous = new Map<string, string>();
 §setup§  distance.set(start, 0);
   const pending = new Set(graph.nodes);
   while (pending.size) {
 §settle§    const node = [...pending].reduce((a, b) => distance.get(a)! <= distance.get(b)! ? a : b);
 §settle§    pending.delete(node);
+§settle§    if (node === target) break;
     for (const [next, weight] of graph.edges.get(node) ?? []) {
 §relax§      const candidate = distance.get(node)! + weight;
-§update§      if (candidate < distance.get(next)!) distance.set(next, candidate);
+      if (candidate < distance.get(next)!) {
+§update§        distance.set(next, candidate);
+§update§        previous.set(next, node);
+      }
     }
   }
-§done§  return distance;
+  const path: string[] = [];
+§path§  for (let at = target; at; at = previous.get(at)!) path.unshift(at);
+§done§  return path;
 }`,
     python: `
-§setup§def dijkstra(graph, start):
+§setup§def shortest_path(graph, start, target):
 §setup§    distance = {node: float("inf") for node in graph}
+§setup§    previous = {}
 §setup§    distance[start] = 0
     pending = set(graph)
     while pending:
 §settle§        node = min(pending, key=distance.get)
 §settle§        pending.remove(node)
+§settle§        if node == target:
+§settle§            break
         for neighbor, weight in graph[node]:
 §relax§            candidate = distance[node] + weight
-§update§            if candidate < distance[neighbor]:
+            if candidate < distance[neighbor]:
 §update§                distance[neighbor] = candidate
-§done§    return distance`,
+§update§                previous[neighbor] = node
+    path = []
+§path§    at = target
+§path§    while at is not None:
+§path§        path.insert(0, at)
+§path§        at = previous.get(at)
+§done§    return path`,
     go: `
-§setup§func dijkstra(graph map[string][]Edge, start string) map[string]int {
+§setup§func shortestPath(graph map[string][]Edge, start, target string) []string {
 §setup§    distance := map[string]int{}
+§setup§    previous := map[string]string{}
 §setup§    pending := map[string]bool{}
 §setup§    for node := range graph {
 §setup§        distance[node] = math.MaxInt
@@ -170,37 +187,47 @@ export const graphSamples: RawSamples = {
     }
 §setup§    distance[start] = 0
     for len(pending) > 0 {
-§settle§        node := ""
-§settle§        for candidate := range pending {
-§settle§            if node == "" || distance[candidate] < distance[node] {
-§settle§                node = candidate
-            }
-        }
+§settle§        node := closest(pending, distance)
 §settle§        delete(pending, node)
+§settle§        if node == target {
+§settle§            break
+        }
         for _, edge := range graph[node] {
 §relax§            candidate := distance[node] + edge.Weight
-§update§            if candidate < distance[edge.To] {
+            if candidate < distance[edge.To] {
 §update§                distance[edge.To] = candidate
+§update§                previous[edge.To] = node
             }
         }
     }
-§done§    return distance
+    path := []string{}
+§path§    for at := target; at != ""; at = previous[at] {
+§path§        path = append([]string{at}, path...)
+    }
+§done§    return path
 }`,
     java: `
-§setup§static Map<String, Integer> dijkstra(Map<String, List<Edge>> graph, String start) {
+§setup§static List<String> shortestPath(Map<String, List<Edge>> graph, String start, String target) {
 §setup§    Map<String, Integer> distance = new HashMap<>();
+§setup§    Map<String, String> previous = new HashMap<>();
 §setup§    for (String node : graph.keySet()) distance.put(node, Integer.MAX_VALUE);
 §setup§    distance.put(start, 0);
     Set<String> pending = new HashSet<>(graph.keySet());
     while (!pending.isEmpty()) {
 §settle§        String node = Collections.min(pending, Comparator.comparing(distance::get));
 §settle§        pending.remove(node);
+§settle§        if (node.equals(target)) break;
         for (Edge edge : graph.get(node)) {
 §relax§            int candidate = distance.get(node) + edge.weight;
-§update§            if (candidate < distance.get(edge.to)) distance.put(edge.to, candidate);
+            if (candidate < distance.get(edge.to)) {
+§update§                distance.put(edge.to, candidate);
+§update§                previous.put(edge.to, node);
+            }
         }
     }
-§done§    return distance;
+    LinkedList<String> path = new LinkedList<>();
+§path§    for (String at = target; at != null; at = previous.get(at)) path.addFirst(at);
+§done§    return path;
 }`,
   },
 };

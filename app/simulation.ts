@@ -5,6 +5,12 @@ export type CubeItem = {
   label: string;
   value?: number;
   slot?: number;
+  // Divide-and-conquer layout: `lane` is the recursion depth (row) and `col`
+  // the horizontal position, so split runs physically separate on the stage.
+  lane?: number;
+  col?: number;
+  // Small corner annotation, e.g. a Dijkstra distance or a visit order.
+  badge?: string;
 };
 
 export type SimFrame = {
@@ -20,6 +26,11 @@ export type SimFrame = {
   frontier?: string[];
   visited?: string[];
   distances?: Record<string, number>;
+  // Ordered node ids whose connecting edges are the highlighted result path.
+  path?: string[];
+  // Total lanes used across the whole trace, so the stage can size the split
+  // tree once instead of letting rows drift as the recursion deepens.
+  lanes?: number;
 };
 
 export const graphEdges: [string, string, number][] = [
@@ -169,24 +180,58 @@ function quickTrace(raw: string) {
 
 function mergeTrace(raw: string) {
   const { values: given } = parseInput(raw);
-  const items = numberItems(given.length ? given : [8, 3, 6, 2, 7, 4]);
-  const frames = [snapshot(items, "Start with one unsorted run.", "Split, then merge in order.", "setup", "Initialize")];
-  const sort = (start: number, end: number): CubeItem[] => {
-    if (end - start <= 1) return items.slice(start, end);
-    const middle = Math.floor((start + end) / 2);
-    frames.push(snapshot(items, `Split slots ${start}–${end - 1}.`, `Left ${start}–${middle - 1}; right ${middle}–${end - 1}.`, "split", "Divide", items.slice(start, end).map(item => item.id)));
-    const left = sort(start, middle), right = sort(middle, end), merged: CubeItem[] = [];
-    while (left.length && right.length) {
-      frames.push(snapshot(items, `Compare ${left[0].label} and ${right[0].label}.`, "Take the smaller front cube.", "compare", "Merge", [left[0].id, right[0].id]));
-      merged.push((left[0].value ?? 0) <= (right[0].value ?? 0) ? left.shift()! : right.shift()!);
+  const values = given.length ? given : [8, 3, 6, 2, 7, 4];
+  // Cube identity is fixed; `lane`/`col` move each cube around the split tree.
+  const cubes: CubeItem[] = values.map((value, index) => ({ id: `item-${index}`, label: String(value), value, lane: 0, col: index }));
+  const order = [...cubes];
+  const frames: SimFrame[] = [];
+  const GAP = .3;
+  const run = (list: CubeItem[]) => list.map(item => item.label).join(", ");
+  const shot = (message: string, detail: string, codeKey: string, phase: string, active: string[] = [], settled: string[] = []) =>
+    frames.push(snapshot(cubes, message, detail, codeKey, phase, active, settled));
+
+  shot("Start with one unsorted run.", `Split [${run(order)}] until every run holds one value.`, "setup", "Initialize");
+
+  const sort = (start: number, end: number, lane: number, offset: number): CubeItem[] => {
+    const segment = order.slice(start, end);
+    if (segment.length < 2) {
+      segment.forEach((cube, index) => { cube.lane = lane; cube.col = start + index + offset; });
+      if (segment.length) shot(`Run [${run(segment)}] holds one value.`, "A single value is already sorted.", "base", "Base case", segment.map(cube => cube.id), segment.map(cube => cube.id));
+      return segment;
     }
-    merged.push(...left, ...right);
-    items.splice(start, end - start, ...merged);
-    frames.push(snapshot(items, `Merge ${merged.map(item => item.label).join(", ")}.`, "This run is now ordered.", "merge", "Merge", merged.map(item => item.id), merged.map(item => item.id)));
-    return [...merged];
+    const middle = Math.floor((start + end) / 2);
+    const left = order.slice(start, middle), right = order.slice(middle, end);
+    const leftOffset = offset - GAP, rightOffset = offset + GAP;
+    left.forEach((cube, index) => { cube.lane = lane + 1; cube.col = start + index + leftOffset; });
+    right.forEach((cube, index) => { cube.lane = lane + 1; cube.col = middle + index + rightOffset; });
+    shot(`Split [${run(segment)}] down the middle.`, `Left [${run(left)}] · right [${run(right)}].`, "split", "Divide", segment.map(cube => cube.id));
+
+    const sortedLeft = [...sort(start, middle, lane + 1, leftOffset)];
+    const sortedRight = [...sort(middle, end, lane + 1, rightOffset)];
+
+    const merged: CubeItem[] = [];
+    const lift = (cube: CubeItem) => { cube.lane = lane; cube.col = start + merged.length + offset; merged.push(cube); };
+    while (sortedLeft.length && sortedRight.length) {
+      const [head, other] = [sortedLeft[0], sortedRight[0]];
+      shot(`Compare ${head.label} and ${other.label}.`, `Fronts of [${run(sortedLeft)}] and [${run(sortedRight)}].`, "compare", "Merge", [head.id, other.id], merged.map(cube => cube.id));
+      const taken = (head.value ?? 0) <= (other.value ?? 0) ? sortedLeft.shift()! : sortedRight.shift()!;
+      lift(taken);
+      shot(`Take ${taken.label} into the merged run.`, `Merged so far: [${run(merged)}].`, "merge", "Take", [taken.id], merged.map(cube => cube.id));
+    }
+    for (const remaining of [...sortedLeft, ...sortedRight]) {
+      lift(remaining);
+      shot(`Copy ${remaining.label} across.`, "One run is empty, so the rest carries over in order.", "merge", "Copy rest", [remaining.id], merged.map(cube => cube.id));
+    }
+    order.splice(start, end - start, ...merged);
+    shot(`Run [${run(merged)}] is sorted.`, "Hand this run up to the level above.", "merge", "Run merged", [], merged.map(cube => cube.id));
+    return merged;
   };
-  sort(0, items.length);
-  frames.push(snapshot(items, "The final run is sorted.", "Merge sort is complete.", "done", "Complete", [], items.map(item => item.id)));
+
+  sort(0, order.length, 0, 0);
+  order.forEach((cube, index) => { cube.lane = 0; cube.col = index; });
+  shot("The array is sorted.", `Final order: [${run(order)}].`, "done", "Complete", [], order.map(cube => cube.id));
+  const lanes = Math.max(...frames.flatMap(frame => frame.items.map(item => item.lane ?? 0))) + 1;
+  for (const frame of frames) frame.lanes = lanes;
   return frames;
 }
 
@@ -238,16 +283,20 @@ function treeTrace(algorithm: AlgorithmDefinition, raw: string, variant: string)
 }
 
 function graphTrace(algorithm: AlgorithmDefinition, raw: string) {
-  const { start: rawStart } = parseInput(raw);
+  const { start: rawStart, end: rawEnd } = parseInput(raw);
   const start = graphNodes.includes(rawStart) ? rawStart : "A";
-  const items = graphNodes.map(node => ({ id: node, label: node }));
+  const items: CubeItem[] = graphNodes.map(node => ({ id: node, label: node }));
+  if (algorithm.id === "dijkstra") {
+    const end = graphNodes.includes(rawEnd) && rawEnd !== start ? rawEnd : graphNodes.find(node => node !== start)!;
+    return dijkstraTrace(items, start, end);
+  }
   const frames = [snapshot(items, `Start at ${start}.`, "The frontier contains one cube.", "setup", "Initialize", [start], [], [], { frontier: [start] })];
-  if (algorithm.id === "dijkstra") return dijkstraTrace(items, start, frames);
   const frontier = [start], discovered = new Set([start]), visited: string[] = [];
   while (frontier.length) {
     const node = algorithm.id === "bfs" ? frontier.shift()! : frontier.pop()!;
     visited.push(node);
-    frames.push(snapshot(items, `${algorithm.id === "bfs" ? "Dequeue" : "Pop"} ${node}.`, "Visit the next frontier cube.", algorithm.id === "bfs" ? "dequeue" : "pop", "Visit", [node], visited, [], { frontier: [...frontier], visited: [...visited] }));
+    items.find(item => item.id === node)!.badge = String(visited.length);
+    frames.push(snapshot(items, `${algorithm.id === "bfs" ? "Dequeue" : "Pop"} ${node}.`, `Visit ${node} as number ${visited.length}.`, algorithm.id === "bfs" ? "dequeue" : "pop", "Visit", [node], visited, [], { frontier: [...frontier], visited: [...visited] }));
     const neighbors = adjacency[node].map(([next]) => next);
     for (const next of algorithm.id === "dfs" ? [...neighbors].reverse() : neighbors) {
       if (discovered.has(next)) continue;
@@ -255,30 +304,60 @@ function graphTrace(algorithm: AlgorithmDefinition, raw: string) {
       frames.push(snapshot(items, `Discover ${next} from ${node}.`, `Add ${next} to the ${algorithm.id === "bfs" ? "queue" : "stack"}.`, algorithm.id === "bfs" ? "enqueue" : "push", "Discover", [node, next], visited, [], { frontier: [...frontier], visited: [...visited] }));
     }
   }
-  frames.push(snapshot(items, "Traversal complete.", "Every reachable cube was visited.", "done", "Complete", [], visited, [], { visited }));
+  frames.push(snapshot(items, "Traversal complete.", `Visit order: ${visited.join(" \u2192 ")}.`, "done", "Complete", [], visited, [], { visited }));
   return frames;
 }
 
-function dijkstraTrace(items: CubeItem[], start: string, frames: SimFrame[]) {
+function dijkstraTrace(items: CubeItem[], start: string, end: string) {
   const distances = Object.fromEntries(graphNodes.map(node => [node, Infinity])) as Record<string, number>;
+  const previous: Record<string, string> = {};
   distances[start] = 0;
   const settled = new Set<string>();
+  // Every cube wears its current best-known distance, so the numbers the
+  // algorithm reasons about are visible on the stage itself.
+  const stamp = () => {
+    for (const item of items) item.badge = Number.isFinite(distances[item.id]) ? String(distances[item.id]) : "\u221e";
+  };
+  stamp();
+  const frames = [snapshot(items, `Find the shortest path ${start} \u2192 ${end}.`, `${start} starts at 0; every other cube starts at \u221e.`, "setup", "Initialize", [start], [], [], { distances: { ...distances } })];
+
   while (settled.size < graphNodes.length) {
     const node = graphNodes.filter(candidate => !settled.has(candidate)).sort((a, b) => distances[a] - distances[b])[0];
     if (!node || !Number.isFinite(distances[node])) break;
     settled.add(node);
-    frames.push(snapshot(items, `Settle ${node} at distance ${distances[node]}.`, "This is the closest unsettled cube.", "settle", "Settle", [node], [...settled], [], { distances: { ...distances }, visited: [...settled] }));
+    stamp();
+    frames.push(snapshot(items, `Settle ${node} at distance ${distances[node]}.`, node === end ? `${end} is settled, so its distance is final.` : "This is the closest unsettled cube; its distance can no longer improve.", "settle", "Settle", [node], [...settled], [], { distances: { ...distances }, visited: [...settled] }));
+    if (node === end) break;
     for (const [next, weight] of adjacency[node]) {
       if (settled.has(next)) continue;
       const candidate = distances[node] + weight;
-      frames.push(snapshot(items, `Test ${node} → ${next} (${weight}).`, `Candidate distance: ${candidate}.`, "relax", "Relax edge", [node, next], [...settled], [], { distances: { ...distances }, visited: [...settled] }));
+      frames.push(snapshot(items, `Test ${node} \u2192 ${next} (${weight}).`, `Candidate: ${distances[node]} + ${weight} = ${candidate} vs ${Number.isFinite(distances[next]) ? distances[next] : "\u221e"}.`, "relax", "Relax edge", [node, next], [...settled], [], { distances: { ...distances }, visited: [...settled] }));
       if (candidate < distances[next]) {
         distances[next] = candidate;
-        frames.push(snapshot(items, `Update ${next} to ${candidate}.`, "A shorter path has been found.", "update", "Update distance", [next], [...settled], [], { distances: { ...distances }, visited: [...settled] }));
+        previous[next] = node;
+        stamp();
+        frames.push(snapshot(items, `Update ${next} to ${candidate}.`, `A shorter route reaches ${next} through ${node}.`, "update", "Update distance", [next], [...settled], [], { distances: { ...distances }, visited: [...settled] }));
       }
     }
   }
-  frames.push(snapshot(items, "Shortest paths are final.", "Every reachable cube is settled.", "done", "Complete", [], [...settled], [], { distances, visited: [...settled] }));
+
+  const path: string[] = [];
+  if (Number.isFinite(distances[end])) {
+    for (let at: string | undefined = end; at; at = previous[at]) {
+      path.unshift(at);
+      if (at === start) break;
+    }
+  }
+  // Rebuild the answer hop by hop instead of just asserting it.
+  for (let index = path.length - 1; index > 0; index--) {
+    const hop = path.slice(index - 1);
+    frames.push(snapshot(items, `${path[index]} was reached from ${path[index - 1]}.`, `Step back through the recorded predecessors: ${hop.join(" \u2192 ")}.`, "path", "Trace back", [path[index], path[index - 1]], [...settled], [], { distances: { ...distances }, path: hop, visited: [...settled] }));
+  }
+  const resolved = path.length > 1;
+  frames.push(snapshot(items,
+    resolved ? `Shortest path: ${path.join(" \u2192 ")}.` : `${end} is unreachable from ${start}.`,
+    resolved ? `Total distance ${distances[end]}, along the highlighted edges.` : "No route exists in this graph.",
+    "done", "Result", resolved ? path : [], [...settled], [], { distances, path, visited: [...settled] }));
   return frames;
 }
 

@@ -12,18 +12,44 @@ const graphPositions: Record<string, { x: number; y: number }> = {
   D: { x: 420, y: 94 }, E: { x: 420, y: 269 }, F: { x: 592, y: 170 },
 };
 
-function layoutPosition(algorithm: AlgorithmDefinition, item: SimFrame["items"][number], index: number, count: number) {
+// Horizontal spread of a lane-based (divide-and-conquer) layout, measured once
+// per frame so split runs keep a consistent scale as they fan out.
+type Spread = { count: number; min: number; max: number; laned: boolean; lanes: number };
+
+function measure(frame: SimFrame): Spread {
+  let min = Infinity, max = -Infinity, laned = false;
+  for (const item of frame.items) {
+    if (item.col === undefined) continue;
+    laned = true;
+    min = Math.min(min, item.col);
+    max = Math.max(max, item.col);
+  }
+  return { count: frame.items.length, min, max, laned, lanes: Math.max(1, frame.lanes ?? 1) };
+}
+
+function layoutPosition(algorithm: AlgorithmDefinition, item: SimFrame["items"][number], index: number, spread: Spread) {
   if (algorithm.structure === "graph") return graphPositions[item.id] ?? { x: STAGE_W / 2, y: STAGE_H / 2 };
   if (algorithm.structure === "recursion") {
-    const pitch = count > 1 ? Math.min(44, 264 / (count - 1)) : 0;
-    return { x: STAGE_W / 2 + (index - (count - 1) / 2) * 10, y: 320 - index * pitch };
+    const pitch = spread.count > 1 ? Math.min(44, 264 / (spread.count - 1)) : 0;
+    return { x: STAGE_W / 2 + (index - (spread.count - 1) / 2) * 10, y: 320 - index * pitch };
   }
   if (algorithm.structure === "tree") {
     const slot = item.slot ?? index, level = Math.floor(Math.log2(slot + 1));
     const place = slot - (2 ** level - 1), width = 560 / 2 ** level;
     return { x: STAGE_W / 2 + (place - (2 ** level - 1) / 2) * width, y: 70 + level * 84 };
   }
-  return { x: STAGE_W / 2 + (index - (count - 1) / 2) * 66, y: 190 };
+  if (item.lane !== undefined && item.col !== undefined) {
+    // Lane 0 is the top row; each split pushes its halves one lane deeper and
+    // each merge lifts the finished run back up. The block is sized from the
+    // trace-wide lane count so rows never drift as the recursion deepens.
+    const span = Math.max(1, spread.max - spread.min);
+    const pitch = Math.min(66, 592 / span);
+    const middle = (spread.min + spread.max) / 2;
+    const laneHeight = Math.min(66, 248 / Math.max(1, spread.lanes - 1));
+    const top = STAGE_H / 2 - (spread.lanes - 1) * laneHeight / 2;
+    return { x: STAGE_W / 2 + (item.col - middle) * pitch, y: top + item.lane * laneHeight };
+  }
+  return { x: STAGE_W / 2 + (index - (spread.count - 1) / 2) * 66, y: 190 };
 }
 
 const easeInOutCubic = (t: number) => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -63,9 +89,9 @@ export function CubeStage({ algorithm, frame }: { algorithm: AlgorithmDefinition
     for (const [id, record] of records.current) {
       if (!els.current.has(id)) { cancelAnimationFrame(record.raf); records.current.delete(id); }
     }
-    const count = frame.items.length;
+    const spread = measure(frame);
     const targets = new Map(frame.items.map((item, index) => {
-      const position = layoutPosition(algorithm, item, index, count);
+      const position = layoutPosition(algorithm, item, index, spread);
       return [item.id, { x: position.x, y: position.y - (frame.active.includes(item.id) ? LIFT : 0) }] as const;
     }));
 
@@ -159,12 +185,19 @@ export function CubeStage({ algorithm, frame }: { algorithm: AlgorithmDefinition
     inner.current?.setAttribute("data-ready", "");
   }, [algorithm, frame]);
 
+  const spread = measure(frame);
   const links: React.ReactNode[] = [];
   if (algorithm.structure === "graph") {
+    const onPath = new Set<string>();
+    for (let index = 1; index < (frame.path?.length ?? 0); index++) {
+      onPath.add([frame.path![index - 1], frame.path![index]].sort().join("-"));
+    }
     for (const [from, to] of graphEdges) {
       const a = graphPositions[from], b = graphPositions[to];
-      const active = frame.active.includes(from) && frame.active.includes(to);
-      links.push(<line key={`${from}-${to}`} className={active ? "active" : ""} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />);
+      const key = [from, to].sort().join("-");
+      const className = onPath.has(key) ? "path"
+        : frame.active.includes(from) && frame.active.includes(to) ? "active" : "";
+      links.push(<line key={`${from}-${to}`} className={className} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />);
     }
   }
   if (algorithm.structure === "tree") {
@@ -174,15 +207,15 @@ export function CubeStage({ algorithm, frame }: { algorithm: AlgorithmDefinition
       const parentSlot = Math.floor((slot - 1) / 2);
       const parentIndex = frame.items.findIndex(candidate => (candidate.slot ?? 0) === parentSlot);
       if (parentIndex < 0) return;
-      const a = layoutPosition(algorithm, frame.items[parentIndex], parentIndex, frame.items.length);
-      const b = layoutPosition(algorithm, item, index, frame.items.length);
+      const a = layoutPosition(algorithm, frame.items[parentIndex], parentIndex, spread);
+      const b = layoutPosition(algorithm, item, index, spread);
       links.push(<line key={item.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />);
     });
   }
 
   return <div className="sim-stage" ref={host} aria-label={`${algorithm.title} simulation`}>
     <div className="sim-inner" ref={inner}>
-      {algorithm.structure === "array" && <i className="sim-floor" />}
+      {algorithm.structure === "array" && !spread.laned && <i className="sim-floor" />}
       <svg className="sim-links" viewBox={`0 0 ${STAGE_W} ${STAGE_H}`} aria-hidden="true">{links}</svg>
       {frame.items.map(item => <div
         key={item.id}
@@ -193,8 +226,10 @@ export function CubeStage({ algorithm, frame }: { algorithm: AlgorithmDefinition
           frame.settled.includes(item.id) ? "set" : "",
           frame.dimmed.includes(item.id) ? "dim" : "",
           item.label.length > 2 ? "long" : "",
+          frame.path?.includes(item.id) ? "onpath" : "",
         ].filter(Boolean).join(" ")}>
         <span>{item.label}</span>
+        {item.badge !== undefined && <i className="sim-badge">{item.badge}</i>}
       </div>)}
     </div>
   </div>;
