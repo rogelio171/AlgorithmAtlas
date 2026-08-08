@@ -52,6 +52,30 @@ test("rebuilds simulation items from edited input", () => {
   assert.deepEqual(after.items.map(item => item.label), ["10", "20", "30"]);
 });
 
+test("searches end on a resolved result, not a still-active cube", () => {
+  for (const id of ["linear-search", "binary-search"]) {
+    const algorithm = algorithms.find(item => item.id === id);
+    for (const preset of [{ label: "default", value: algorithm.defaultInput }, ...algorithm.presets]) {
+      const last = buildSimulation(algorithm, preset.value, "").at(-1);
+      const where = `${id}/${preset.label}`;
+
+      // Nothing is left mid-operation once the search has returned.
+      assert.equal(last.active.length, 0, `${where}: last frame still marks a cube active`);
+      assert.equal(last.phase, "Complete", `${where}: last frame is not a terminal frame`);
+
+      if (/found at index/.test(last.message)) {
+        // The hit is resolved, and resolved wins over every other state.
+        assert.equal(last.settled.length, 1, `${where}: the found cube is not settled`);
+        assert.ok(!last.dimmed.includes(last.settled[0]), `${where}: the found cube is also dimmed`);
+      } else {
+        // A miss resolves nothing — every cube is ruled out instead.
+        assert.equal(last.settled.length, 0, `${where}: a failed search settled a cube`);
+        assert.equal(last.dimmed.length, last.items.length, `${where}: a failed search left cubes unresolved`);
+      }
+    }
+  }
+});
+
 test("merge sort physically separates runs and merges them back up", () => {
   const algorithm = algorithms.find(item => item.id === "merge-sort");
   const trace = buildSimulation(algorithm, "9, 4, 7, 3, 8, 2", "");

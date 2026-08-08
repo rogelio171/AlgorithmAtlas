@@ -82,6 +82,9 @@ function linearTrace(raw: string) {
     frames.push(snapshot(items, `Inspect ${values[index]}.`, `Compare index ${index} with ${target}.`, "compare", "Compare", [id], [], ruledOut, { pointers: { cursor: id } }));
     if (values[index] === target) {
       frames.push(snapshot(items, `Found ${target}.`, `Return index ${index}.`, "match", "Match", [id], [id], ruledOut));
+      // Land on a resolved frame: dropping the cube from `active` lets the
+      // settled colour show, the way every other algorithm ends.
+      frames.push(snapshot(items, `${target} found at index ${index}.`, "The search is complete.", "match", "Complete", [], [id], ruledOut));
       return frames;
     }
     ruledOut.push(id);
@@ -103,6 +106,7 @@ function binaryTrace(raw: string) {
     frames.push(snapshot(items, `Probe the midpoint: ${values[middle]}.`, `Active indices ${low}–${high}.`, "probe", "Probe", [items[middle].id], [], outside, { pointers: { low: items[low].id, mid: items[middle].id, high: items[high].id } }));
     if (values[middle] === target) {
       frames.push(snapshot(items, `Found ${target}.`, `Return index ${middle}.`, "match", "Match", [items[middle].id], [items[middle].id], outside));
+      frames.push(snapshot(items, `${target} found at index ${middle}.`, "The search is complete.", "match", "Complete", [], [items[middle].id], outside));
       return frames;
     }
     if (values[middle] < target) low = middle + 1;
