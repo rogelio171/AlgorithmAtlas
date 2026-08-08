@@ -2,7 +2,7 @@
 
 A new algorithm needs three things: a **catalog entry**, **code samples**, and a
 **trace builder**. If it uses one of the four existing structures, you write no
-Three.js code at all.
+stage-layout code at all.
 
 ---
 
@@ -135,8 +135,8 @@ if (algorithm.id === "selection-sort") return selectionTrace(raw);
 Adding a fifth `StructureKind` (say `"matrix"`) means:
 
 1. Extend the `StructureKind` union in `algorithmData.ts`.
-2. Add a branch to `cubePosition()` in `CubeScene.tsx` returning a
-   `THREE.Vector3` per item.
+2. Add a branch to `layoutPosition()` in `CubeStage.tsx` returning an
+   `{ x, y }` per item in the 660×360 logical stage.
 3. Add a branch to `rebuildLinks()` if the structure has visible connections.
 4. Add a dispatch branch in `buildSimulation`.
 
@@ -148,7 +148,7 @@ independent of ordering, the way the tree layout does.
 ```bash
 npm run lint
 npm test
-node --test tests/cube-cache.test.mjs tests/code-sync.test.mjs
+node --test tests/code-sync.test.mjs tests/themes.test.mjs
 ```
 
 The code-sync suite is the important one here: it simulates every preset and

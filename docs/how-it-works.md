@@ -1,6 +1,6 @@
 # How it works
 
-Three subsystems cooperate: the **simulation engine**, the **3D renderer**, and
+Three subsystems cooperate: the **simulation engine**, the **2D stage**, and
 the **code panel**. They share one contract — the `SimFrame`.
 
 ---
@@ -48,7 +48,7 @@ what makes in-place mutation safe inside the builders.
 - `end` — first character of the right side, upper-cased.
 
 Every builder falls back to a sensible default array when parsing yields
-nothing, so a half-typed input never produces an empty scene.
+nothing, so a half-typed input never produces an empty stage.
 
 ### Dispatch
 
@@ -114,88 +114,90 @@ Graph inputs only choose the **start** node; the `end` value parsed from
 
 ---
 
-## 2. The 3D renderer (`app/CubeScene.tsx`)
+## 2. The 2D stage (`app/CubeStage.tsx`)
 
-### One-time scene setup
+The stage is plain DOM: one absolutely positioned `<div class="sim-cube">` per
+cube, plus an `<svg>` for graph edges and tree branches. There is no canvas and
+no WebGL — every colour comes from the theme's CSS tokens, and motion is driven
+by `requestAnimationFrame` writing `transform`.
 
-An effect with an empty dependency array builds:
+### A fixed logical stage
 
-- a `PerspectiveCamera` (40° FOV) at `(0, 4.6, 9.3)`,
-- a `WebGLRenderer` with antialiasing, PCF soft shadows, sRGB output, and ACES
-  filmic tone mapping — wrapped in `try/catch` so a machine without WebGL gets
-  a `.webgl-fallback` message instead of a crash (the step trace still works),
-- a `HemisphereLight`, a shadow-casting `SpotLight`, and a purple rim
-  `PointLight`,
-- a matte floor plane and a `GridHelper` at `y = -2.5`,
-- `OrbitControls` with damping, panning disabled, distance clamped to 6–14, and
-  polar angle capped so you cannot orbit under the floor,
-- a `ResizeObserver` that keeps the camera aspect and drawing buffer in sync.
-
-The cleanup function cancels the animation frame, disconnects the observer, and
-disposes controls, renderer, and every geometry/material in the scene.
-
-### Per-frame reconciliation
-
-A second effect runs on `[algorithm, frame]` and performs a keyed diff:
-
-1. Rebuild link lines (graph edges, or tree parent→child segments).
-2. Remove and dispose any cube whose id is no longer in `frame.items`.
-3. For each item: create the cube if new (entering from 2 units below so it
-   rises into place), refresh its label texture if the label changed, then set
-   `target`, `targetScale`, and `targetColor`.
-
-Nothing is positioned directly. The render loop interpolates:
+Everything is laid out in a **660×360 logical space**. A `ResizeObserver` scales
+`.sim-inner` to fit whatever the panel is actually showing:
 
 ```ts
-cube.group.position.lerp(cube.target, .115);
-cube.group.scale.lerp(cube.targetScale, .13);
-cube.body.material.color.lerp(cube.targetColor, .12);
-cube.body.material.emissive.lerp(cube.targetColor, .06);
+const scale = Math.min(stage.clientWidth / STAGE_W, stage.clientHeight / STAGE_H);
+world.style.transform = `translate(-50%, -50%) scale(${scale})`;
 ```
 
-Active cubes also spin slowly (`rotation.y += .012`) while playback is running,
-and damp back to rest when paused.
+So one set of coordinates works at every breakpoint, and nothing has to be
+recomputed on resize.
 
 ### Layout per structure
 
 | Structure | Placement |
 | --- | --- |
-| `array` | A single row on the X axis, centred: `(index - (count-1)/2) * 1.16` |
-| `tree` | Level `floor(log2(slot+1))`; width halves each level from `6.6`; Y drops `1.65` per level |
+| `array` | A centred row at `y = 190`, pitch `66` |
+| `tree` | Level `floor(log2(slot+1))`; width halves each level from `560`; `y = 70 + level × 84` |
 | `graph` | Fixed hand-tuned coordinates in `graphPositions` (A–F) |
-| `recursion` | A rising, receding stack: `y = -1.9 + index * 0.9`, `z = -index * 0.16` |
+| `recursion` | A stack growing upward from `y = 320`, pitch capped at `44` |
+
+### The motion model
+
+React renders the cube elements and then gets out of the way: a
+`useLayoutEffect` compares each cube's **live** position against its new target
+and animates the difference itself. Nothing re-renders mid-flight.
+
+**Eased tweens.** Every move is a fixed 380 ms tween on `easeInOutCubic` —
+accelerate, glide, decelerate, arrive. Unlike a per-frame `lerp`, it actually
+finishes, and it is frame-rate independent.
+
+**Arc swaps.** Before animating, the effect looks for pairs of cubes trading
+places (each one's target is the other's current position). Those get opposing
+vertical arcs — the right-mover passes over, the left-mover dips under — so two
+cubes never slide through each other:
+
+```ts
+const over = -Math.min(46, 16 + span * .18), under = Math.min(24, 8 + span * .1);
+```
+
+Long single moves (over 100 units, e.g. a merge-sort splice) also get a gentle
+arc so the eye can follow them.
+
+**Squash & stretch.** Cubes stretch along their direction of travel and relax
+back, peaking mid-flight via `Math.sin(Math.PI * k)`, then a short 150 ms
+landing squash. The effect scales with distance, so a one-slot nudge stays
+subtle:
+
+```ts
+record.sx = horizontal ? 1 + .2 * s * strength : 1 - .13 * s * strength;
+```
+
+**Entrances.** New cubes fade in and scale from 0.4 → 1 over 240 ms.
+
+**Reduced motion.** `prefers-reduced-motion` is read once; when set, cubes jump
+straight to their targets with no tween, arc, or squash.
+
+Each cube's in-flight `requestAnimationFrame` handle is stored and cancelled
+before a new animation starts, so rapid scrubbing never leaves two loops
+fighting over the same element.
 
 ### State colours
 
-All scene colours come from the active theme's `ScenePalette` (`app/themes.ts`),
-passed into `CubeScene` as a prop; changing the theme rebuilds the scene.
-Tokyo Night defaults:
+All colours come from the active theme's CSS tokens — the stage itself has no
+palette. Tokyo Night defaults:
 
-| State | Palette key | Tokyo Night | Extra |
+| State | Token | Tokyo Night | Extra |
 | --- | --- | --- | --- |
-| Active | `active` | `0xe0af68` (yellow) | scale ×1.15, lifted `+0.55` on Y, rotating |
-| Settled | `settled` | `0x9ece6a` (green) | — |
-| Dimmed | `dimmed` | `0x292e42` | scale ×0.78, `opacity 0.38`, transparent |
-| Default | `pending` | `0x7aa2f7` (blue) | — |
+| Active | `--warn` | `#e0af68` (yellow) | lifted 24px, glow, raised z-index |
+| Settled | `--ok` | `#9ece6a` (green) | — |
+| Dimmed | `--raise` | `#292e42` | `opacity .5`, muted label |
+| Pending | `--cube` → `--accent` | `#7aa2f7` (blue) | — |
 
-### Label textures and the cube cache
-
-Labels are 256×128 canvases turned into `CanvasTexture`s — cheap, and no font
-loading. Regenerating them every frame would leak GPU memory, so
-`app/cubeCache.ts` provides:
-
-```ts
-cubeVisualSignature({ id, label }) // → `${id}\u0000${label}`
-```
-
-The NUL separator keeps ids and labels unambiguous, so `{id:"a", label:"bc"}`
-can never collide with `{id:"ab", label:"c"}`.
-
-`refreshCubeLabel` compares the stored signature with the new one and returns
-early when they match; otherwise it disposes the old texture and draws a new
-one. This is what makes editing the input string update the labels correctly
-instead of showing stale numbers — the behaviour covered by
-`tests/cube-cache.test.mjs`.
+`--cube` exists so themes whose accent collides with `--warn` or `--ok` (Swiss,
+Phosphor) can give pending cubes their own colour; `tests/themes.test.mjs`
+enforces that the three states never resolve to the same value.
 
 ---
 

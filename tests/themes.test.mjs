@@ -21,16 +21,43 @@ test("globals.css defines a token block for every non-default theme", async () =
   }
 });
 
-test("every scene palette is complete", () => {
-  const numericKeys = ["stage", "floor", "cubeBase", "cubeEdge", "emissive", "pending", "active", "settled", "dimmed", "link", "linkActive", "spot", "rim"];
+test("every theme carries a two-tone picker swatch", () => {
   for (const theme of themes) {
-    for (const key of numericKeys) {
-      assert.equal(typeof theme.scene[key], "number", `${theme.id}.scene.${key}`);
-    }
-    assert.equal(theme.scene.grid.length, 2, `${theme.id}.scene.grid`);
-    assert.equal(theme.scene.hemi.length, 2, `${theme.id}.scene.hemi`);
-    assert.ok(theme.scene.labelBg.startsWith("rgba("), `${theme.id}.scene.labelBg`);
-    assert.ok(/^#[0-9a-f]{6}$/i.test(theme.scene.labelText), `${theme.id}.scene.labelText`);
     assert.equal(theme.dot.length, 2, `${theme.id}.dot`);
+    for (const color of theme.dot) {
+      assert.ok(/^#[0-9a-f]{6}$/i.test(color), `${theme.id}.dot ${color}`);
+    }
+    assert.ok(theme.label.length, `${theme.id}.label`);
+  }
+});
+
+function themeTokens(css, id) {
+  const start = id === defaultThemeId ? css.indexOf(":root{") : css.indexOf(`[data-theme="${id}"]{`);
+  const block = css.slice(start, css.indexOf("}", start));
+  return Object.fromEntries([...block.matchAll(/--([\w-]+):\s*([^;]+);/g)].map(m => [m[1], m[2].trim()]));
+}
+
+test("themes define the tokens the 2D stage renders with", async () => {
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const required = ["--deep", "--line", "--accent", "--warn", "--ok", "--raise", "--on-accent"];
+  for (const theme of themes) {
+    const block = css.slice(
+      theme.id === defaultThemeId ? css.indexOf(":root{") : css.indexOf(`[data-theme="${theme.id}"]{`),
+      css.indexOf("}", theme.id === defaultThemeId ? css.indexOf(":root{") : css.indexOf(`[data-theme="${theme.id}"]{`)),
+    );
+    for (const token of required) {
+      assert.ok(block.includes(`${token}:`), `${theme.id} is missing ${token}`);
+    }
+  }
+});
+
+test("pending, active, and settled cubes are distinct in every theme", async () => {
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const base = themeTokens(css, defaultThemeId);
+  for (const theme of themes) {
+    const tokens = { ...base, ...themeTokens(css, theme.id) };
+    const pending = (tokens.cube ?? "").startsWith("var(") ? tokens.accent : tokens.cube ?? tokens.accent;
+    const states = [pending, tokens.warn, tokens.ok].map(value => value.toLowerCase());
+    assert.equal(new Set(states).size, 3, `${theme.id} reuses a color across cube states: ${states.join(" / ")}`);
   }
 });

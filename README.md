@@ -1,7 +1,7 @@
 # Algorithm Atlas
 
 Algorithm Atlas is an interactive learning lab that synchronizes algorithm
-steps, highlighted source code, and Three.js visualizations.
+steps, highlighted source code, and animated 2D visualizations.
 
 Phase 1 includes implementations in TypeScript, Python, Go, and Java. Choose an
 algorithm, language, input preset, and variant, then play or step through the
@@ -21,7 +21,7 @@ simulation.
 
 ## Features
 
-- Three.js scenes for arrays, trees, graphs, and recursive call stacks
+- Animated 2D stages for arrays, trees, graphs, and recursive call stacks
 - Code highlighting synchronized with every simulation step
 - TypeScript, Python, Go, and Java implementations
 - Play, pause, previous, next, reset, and playback-speed controls
@@ -59,7 +59,8 @@ npm test
 
 ## Project structure
 
-- `app/AlgorithmLab.tsx`: interactive lab and Three.js renderer
+- `app/AlgorithmLab.tsx`: interactive lab shell
+- `app/CubeStage.tsx`: animated 2D simulation stage
 - `app/algorithmData.ts`: algorithm catalog
 - `app/code/`: marker-annotated four-language code samples
 - `app/globals.css`: responsive visual design

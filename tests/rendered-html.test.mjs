@@ -21,20 +21,29 @@ test("server-renders the algorithm laboratory", async () => {
   assert.match(html, /Binary search/);
   assert.match(html, /typescript source code/);
   assert.match(html, /tok-keyword/);
-  assert.match(html, /Three-dimensional Linear search simulation/);
+  assert.match(html, /Linear search simulation/);
+  assert.match(html, /sim-cube/);
 });
 
 test("keeps simulation, highlighting, and responsive motion in source", async () => {
-  const [lab, scene, syntax, css] = await Promise.all([
+  const [lab, stage, syntax, css] = await Promise.all([
     readFile(new URL("../app/AlgorithmLab.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/CubeScene.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/CubeStage.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/SyntaxCode.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(lab, /buildSimulation/);
-  assert.match(scene, /BoxGeometry/);
-  assert.match(scene, /\.position\.lerp/);
+  assert.match(stage, /easeInOutCubic/);
+  assert.match(stage, /requestAnimationFrame/);
   assert.match(syntax, /tok-\$\{kind\}/);
   assert.match(css, /--bg:#1a1b26/);
   assert.match(css, /prefers-reduced-motion/);
+});
+
+test("the stage animates with eased arcs, squash, and a reduced-motion path", async () => {
+  const stage = await readFile(new URL("../app/CubeStage.tsx", import.meta.url), "utf8");
+  assert.match(stage, /prefers-reduced-motion/);
+  assert.match(stage, /Math\.sin\(Math\.PI \* k\)/);
+  assert.match(stage, /arcOf/);
+  assert.doesNotMatch(stage, /\bthree\b/);
 });

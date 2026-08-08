@@ -1,18 +1,42 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { algorithms, categories, languages, type Language } from "./algorithmData";
 import { getCodeSample } from "./codeSamples";
 import { buildSimulation } from "./simulation";
-import { CubeScene } from "./CubeScene";
+import { CubeStage } from "./CubeStage";
 import { SyntaxCode } from "./SyntaxCode";
 import { defaultThemeId, isThemeId, themeById, themes, type ThemeId } from "./themes";
 
 const initial = algorithms[0];
 const THEME_STORAGE_KEY = "atlas-theme";
+const THEME_EVENT = "atlas-theme-change";
 
 function themeSwatch(id: ThemeId) {
   const [ground, accent] = themeById[id].dot;
   return { background: `linear-gradient(135deg, ${ground} 50%, ${accent} 50%)` };
+}
+
+// The saved theme is an external store: the server always renders the default,
+// then React swaps in the stored choice after hydration. `storage` keeps
+// multiple tabs in agreement for free.
+function subscribeTheme(onChange: () => void) {
+  window.addEventListener(THEME_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(THEME_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+function readTheme(): ThemeId {
+  const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return saved && isThemeId(saved) ? saved : defaultThemeId;
+}
+function readDefaultTheme(): ThemeId {
+  return defaultThemeId;
+}
+function storeTheme(next: ThemeId) {
+  window.localStorage.setItem(THEME_STORAGE_KEY, next);
+  window.dispatchEvent(new Event(THEME_EVENT));
 }
 
 export default function AlgorithmLab() {
@@ -24,7 +48,7 @@ export default function AlgorithmLab() {
   const [step, setStep] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const [theme, setTheme] = useState<ThemeId>(defaultThemeId);
+  const theme = useSyncExternalStore(subscribeTheme, readTheme, readDefaultTheme);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const algorithm = algorithms.find(item => item.id === selected) ?? initial;
   const trace = useMemo(() => buildSimulation(algorithm, input, variant), [algorithm, input, variant]);
@@ -33,13 +57,7 @@ export default function AlgorithmLab() {
   const activeLines = sample.highlights[current.codeKey] ?? sample.highlights.setup ?? [1];
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (saved && isThemeId(saved)) setTheme(saved);
-  }, []);
-
-  useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
 
   useEffect(() => {
@@ -72,7 +90,7 @@ export default function AlgorithmLab() {
             <div className="theme-backdrop" onClick={() => setThemeMenuOpen(false)} />
             <div className="theme-menu" role="menu" aria-label="Theme">
               {themes.map(item => <button key={item.id} role="menuitem" className={item.id === theme ? "active" : ""}
-                onClick={() => { setTheme(item.id); setThemeMenuOpen(false); }}>
+                onClick={() => { storeTheme(item.id); setThemeMenuOpen(false); }}>
                 <i className="swatch" style={themeSwatch(item.id)} />{item.label}
               </button>)}
             </div>
@@ -83,7 +101,7 @@ export default function AlgorithmLab() {
     </header>
     <section className="intro">
       <div><p className="eyebrow">PHASE 01 · MOTION EXPLAINS THE CODE</p><h1>See the state change.<br /><em>Understand the algorithm.</em></h1></div>
-      <p>Each line of code is synchronized with a three-dimensional cube simulation. Scrub, replay, and switch languages without losing the current idea.</p>
+      <p>Each line of code is synchronized with an animated cube simulation. Scrub, replay, and switch languages without losing the current idea.</p>
     </section>
     <nav className="category-tabs" aria-label="Algorithm categories">
       {categories.map(item => <button className={category === item ? "active" : ""} onClick={() => setCategory(item)} key={item}>{item}</button>)}
@@ -94,7 +112,7 @@ export default function AlgorithmLab() {
         <div className="catalog-scroll">{visible.map((item, index) => <button className={`catalog-item ${selected === item.id ? "selected" : ""}`} key={item.id} onClick={() => choose(item.id)}>
           <span>{String(index + 1).padStart(2, "0")}</span><div><strong>{item.title}</strong><small>{item.category} · {item.difficulty}</small></div><i />
         </button>)}</div>
-        <div className="library-note"><span>TIP</span><p>Drag the scene to orbit. Scroll over it to zoom.</p></div>
+        <div className="library-note"><span>TIP</span><p>Step with ← and → to read one operation at a time.</p></div>
       </aside>
 
       <section className="lab panel">
@@ -104,7 +122,7 @@ export default function AlgorithmLab() {
         </div>
         <div className="simulation-card">
           <div className="card-top"><span><i /> LIVE CUBE TRACE</span><b>{String(safeStep + 1).padStart(2, "0")} / {String(trace.length).padStart(2, "0")}</b></div>
-          <CubeScene algorithm={algorithm} frame={current} playing={playing} palette={themeById[theme].scene} />
+          <CubeStage algorithm={algorithm} frame={current} />
           <div className="scene-caption"><small>{current.phase}</small><strong>{current.message}</strong><span>{current.detail}</span></div>
           <div className="scene-legend"><span><i className="active-cube" />Active</span><span><i className="settled-cube" />Resolved</span><span><i className="pending-cube" />Pending</span></div>
         </div>
@@ -141,6 +159,6 @@ export default function AlgorithmLab() {
         </div>
       </aside>
     </section>
-    <footer><span>ALGORITHM ATLAS · PHASE 01</span><span>Three.js cube simulation engine</span><span>{themeById[theme].label} visual system</span></footer>
+    <footer><span>ALGORITHM ATLAS · PHASE 01</span><span>2D cube simulation engine</span><span>{themeById[theme].label} visual system</span></footer>
   </main>;
 }

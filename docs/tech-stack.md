@@ -16,7 +16,6 @@ Versions below are the exact pins from `package.json` at the time of writing.
 | --- | --- | --- |
 | `react` / `react-dom` | 19.2.6 | The whole UI. `AlgorithmLab` is a client component; `app/page.tsx` and `app/layout.tsx` are server components |
 | `next` | 16.2.6 | App Router conventions — `app/layout.tsx`, `app/page.tsx`, `metadata` export, `next/headers`, `next/navigation` |
-| `three` | ^0.185.1 | The cube simulation: renderer, scene graph, lights, shadows, `OrbitControls`, canvas-texture labels |
 | `drizzle-orm` | 0.45.2 | Present for the D1 database path only. **Not used by Algorithm Atlas itself** — `db/schema.ts` is intentionally empty |
 | `react-loading-skeleton` | 3.5.0 | Declared but not imported anywhere in the app today |
 
@@ -46,9 +45,10 @@ system:
   properties (`--bg`, `--panel`, `--accent`, `--warn`, `--ok`, …) defined on
   `:root` (Tokyo Night, the default) and overridden per theme in
   `[data-theme="…"]` blocks. Alpha variants derive via `color-mix`, so themes
-  only redefine base tokens. The matching Three.js scene palettes (background,
-  lights, floor, cube colors) live in `app/themes.ts`; the picker in the top
-  bar sets `data-theme` on `<html>` and persists the choice to `localStorage`.
+  only redefine base tokens. The simulation stage reads the same tokens as the
+  rest of the UI, so a theme is pure CSS — `app/themes.ts` only carries labels
+  and picker swatches. The picker in the top bar sets `data-theme` on `<html>`
+  and persists the choice to `localStorage`.
 - **CSS Grid** workspace (`225px` catalog rail + fluid lab column) that
   collapses to a flex column under 780px.
 - Three responsive breakpoints: 1250px, 780px, 440px.

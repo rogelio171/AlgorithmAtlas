@@ -4,7 +4,7 @@ Algorithm Atlas is an interactive learning lab that keeps three things in sync
 on a single screen:
 
 1. a **step trace** of an algorithm running on your input,
-2. a **Three.js cube simulation** that shows the data structure changing, and
+2. an **animated 2D cube stage** that shows the data structure changing, and
 3. a **source listing** in TypeScript, Python, Go, or Java with the currently
    executing lines highlighted.
 
@@ -28,7 +28,7 @@ pre-computed list of frames built in TypeScript.
 
 ```
 User edits input ─┐
-Picks algorithm ──┼─► buildSimulation() ─► SimFrame[] ─┬─► CubeScene   (Three.js)
+Picks algorithm ──┼─► buildSimulation() ─► SimFrame[] ─┬─► CubeStage   (animated 2D)
 Picks variant ────┘   (app/simulation.ts)              ├─► scene caption + live state
                                                        └─► frame.codeKey
                                                              │

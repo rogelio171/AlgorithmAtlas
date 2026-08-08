@@ -40,3 +40,24 @@ test("every simulation step maps to explicit highlight lines", () => {
 test("the default exercise is the first catalog entry", () => {
   assert.equal(algorithms[0].id, "linear-search");
 });
+
+test("rebuilds simulation items from edited input", () => {
+  const algorithm = algorithms.find(item => item.id === "binary-search");
+  assert.ok(algorithm);
+
+  const before = buildSimulation(algorithm, "1, 3, 5 | 3", "")[0];
+  const after = buildSimulation(algorithm, "10, 20, 30 | 20", "")[0];
+
+  assert.deepEqual(before.items.map(item => item.label), ["1", "3", "5"]);
+  assert.deepEqual(after.items.map(item => item.label), ["10", "20", "30"]);
+});
+
+test("cube ids stay stable across a trace so moves animate instead of teleporting", () => {
+  const algorithm = algorithms.find(item => item.id === "bubble-sort");
+  const trace = buildSimulation(algorithm, algorithm.defaultInput, "");
+  const first = new Set(trace[0].items.map(item => item.id));
+  for (const frame of trace) {
+    assert.deepEqual(new Set(frame.items.map(item => item.id)), first);
+    assert.equal(new Set(frame.items.map(item => item.id)).size, frame.items.length);
+  }
+});

@@ -16,7 +16,7 @@ type AlgorithmDefinition = {
   insight: string;       // shown as INVARIANT in the live-state panel
   time: string;          // TIME badge
   space: string;         // SPACE badge
-  structure: StructureKind; // array | graph | tree | recursion — drives 3D layout
+  structure: StructureKind; // array | graph | tree | recursion — drives stage layout
   defaultInput: string;
   presets: { label: string; value: string }[];
   variants?: string[];   // renders the variant button row when present
@@ -93,8 +93,8 @@ graph LR
 Edge list (from `graphEdges` in `app/simulation.ts`): `A-B 4`, `A-C 2`,
 `B-D 5`, `B-E 3`, `C-D 1`, `C-E 6`, `D-F 4`, `E-F 2`.
 
-Node positions in the 3D scene are hand-tuned constants in
-`CubeScene.tsx › graphPositions`, so the layout is stable and readable rather
+Node positions are hand-tuned constants in
+`CubeStage.tsx › graphPositions`, so the layout is stable and readable rather
 than force-directed.
 
 ## Known simplifications

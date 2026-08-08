@@ -42,36 +42,39 @@ Two suites, both using the built-in `node --test` runner.
 
 Imports the built Worker (`dist/server/index.js`) with a cache-busting query
 string, fetches `/` with a stubbed `ASSETS` binding, and asserts the response
-contains the title, `LIVE CUBE TRACE`, `Binary search`, the code panel's
-`typescript source code` aria-label, a `tok-keyword` span, and the scene's
-aria-label. A second test greps the source for the load-bearing details:
-`buildSimulation`, `BoxGeometry`, `.position.lerp`, the `tok-${kind}` template,
-the `--bg:#1a1b26` token, and the `prefers-reduced-motion` block.
+contains the title, `LIVE CUBE TRACE`, `Linear search`, the code panel's
+`typescript source code` aria-label, a `tok-keyword` span, a `sim-cube`, and the
+stage's aria-label. Further tests grep the source for the load-bearing details:
+`buildSimulation`, the stage's easing and `requestAnimationFrame` loop, its arc
+and reduced-motion paths, the `tok-${kind}` template, the `--bg:#1a1b26` token,
+and the `prefers-reduced-motion` block.
 
 Because it imports the build output, **this suite requires `npm run build`
 first** — which is why `npm test` chains them.
 
-### `tests/cube-cache.test.mjs` — label invalidation and trace rebuilds
-
-Imports `app/cubeCache.ts`, `app/algorithmData.ts`, and `app/simulation.ts`
-**directly as TypeScript**, relying on Node's type stripping. It checks that a
-changed label produces a different visual signature, that an unchanged one stays
-stable, and that editing the input rebuilds the simulation's cube labels.
-
 ### `tests/code-sync.test.mjs` — the debugger contract
 
-Also imports the app's TypeScript directly. For every algorithm × preset ×
-variant, it builds the full simulation and asserts that every emitted
-`codeKey` resolves to explicit, in-range highlight lines in all four
-languages — so a step can never point at the wrong (or no) source line. It
-also pins the default exercise to the first catalog entry and checks no `§`
-marker leaks into rendered code.
+Imports the app's TypeScript directly, relying on Node's type stripping. For
+every algorithm × preset × variant, it builds the full simulation and asserts
+that every emitted `codeKey` resolves to explicit, in-range highlight lines in
+all four languages — so a step can never point at the wrong (or no) source
+line. It also pins the default exercise to the first catalog entry, checks no
+`§` marker leaks into rendered code, verifies editing the input rebuilds the
+cube labels, and pins cube-id stability across a trace (ids must not change
+mid-trace, or cubes would teleport instead of animating).
+
+### `tests/themes.test.mjs` — theme integrity
+
+Checks all ten themes exist with Tokyo Night as the default, that each has a
+`[data-theme]` block in `globals.css` defining the tokens the stage renders
+with, and that pending / active / settled cubes resolve to three **distinct**
+colors in every theme.
 
 > **Note:** the two pure-TS suites are not part of the `npm test` script. Run
 > them explicitly:
 >
 > ```bash
-> node --test tests/cube-cache.test.mjs tests/code-sync.test.mjs
+> node --test tests/code-sync.test.mjs tests/themes.test.mjs
 > ```
 
 ## Linting
@@ -93,7 +96,7 @@ run `npx tsc --noEmit` if you want a standalone type pass.
 The existing code has a distinctive, deliberately compact style. Match it:
 
 - **Dense one-liners in data modules.** `algorithmData.ts` and `layout.tsx`
-  minimise whitespace; `simulation.ts` and `CubeScene.tsx` use normal
+  minimise whitespace; `simulation.ts` and `CubeStage.tsx` use normal
   formatting with occasional multiple statements per line.
 - **Descriptive identifiers in logic, terse ones in snippets.** Trace builders
   use `middle`, `boundary`, `frontier`; the embedded code snippets use `a`, `t`,
@@ -102,35 +105,37 @@ The existing code has a distinctive, deliberately compact style. Match it:
 - **No comments unless they earn it.** The codebase is nearly comment-free; the
   few that exist explain non-obvious platform behaviour (the Seatbelt HMR
   workaround in `vite.config.ts`, the image-security note in `worker/index.ts`).
-- **`"use client"` only where needed** — `AlgorithmLab.tsx` and `CubeScene.tsx`.
+- **`"use client"` only where needed** — `AlgorithmLab.tsx` and `CubeStage.tsx`.
 
-## Working on the 3D scene
+## Working on the simulation stage
 
-- Colour changes need to happen in **two places** to stay consistent: the CSS
-  token block in `app/globals.css` and the matching `ScenePalette` in
-  `app/themes.ts` (the Three.js side). `tests/themes.test.mjs` checks every
-  theme has both halves.
-- Any new geometry, material, or texture must be disposed. Follow the existing
-  pattern: `disposeCube()`, the link-rebuild traversal, and the cleanup function
-  of the setup effect.
-- If you add a new `StructureKind`, you must extend `cubePosition()` and, if it
-  needs edges, `rebuildLinks()`.
-- Test without WebGL by checking the `.webgl-fallback` path — the app is
-  expected to stay usable with only the step trace.
+- **Colours live only in CSS.** The stage reads the same `[data-theme]` tokens
+  as the rest of the UI, so a new theme needs no stage code. Keep pending
+  (`--cube`, defaulting to `--accent`), active (`--warn`), and settled (`--ok`)
+  visibly distinct — `tests/themes.test.mjs` fails the build if any two collide.
+- **Never animate through React.** The rAF loop writes `transform` directly on
+  the cube elements; re-rendering mid-flight would fight it. If you add motion,
+  extend the loop in the layout effect and always `cancelAnimationFrame` the
+  previous handle for that cube first.
+- **Layout is in logical 660×360 units.** Add new structures to
+  `layoutPosition()`, not to the CSS.
+- **Respect reduced motion.** `CubeStage` reads `prefers-reduced-motion` once
+  and jumps cubes straight to their targets; keep any new effect behind the
+  same check.
 
 ## Troubleshooting
 
 | Symptom | Likely cause |
 | --- | --- |
 | `npm test` fails on a missing `dist/server/index.js` | Run `npm run build` first, or use `npm test` which chains it |
-| `cube-cache` test fails to parse TypeScript | Node too old — needs 22.13+, and possibly `--experimental-strip-types` |
+| A `.ts`-importing test fails to parse TypeScript | Node too old — needs 22.13+, and possibly `--experimental-strip-types` |
 | Dev server HMR does not fire on macOS in a sandbox | `vite.config.ts` switches to polling when `CODEX_SANDBOX=seatbelt`; set that env var |
 | `Cloudflare D1 binding \`DB\` is unavailable` | Expected — nothing in the app calls `getDb()`. Set `d1` in `.openai/hosting.json` if you actually want a database |
-| Cubes show stale numbers after editing input | The visual signature in `cubeCache.ts` is not capturing whatever changed |
+| Cubes show stale numbers after editing input | A trace builder is reusing cube ids across different values |
 
 ## Known gaps
 
 - `react-loading-skeleton` is a dependency but unused.
 - Tailwind is registered in PostCSS but never imported by `globals.css`.
-- `tests/cube-cache.test.mjs` and `tests/code-sync.test.mjs` are not wired
-  into `npm test`.
+- `tests/code-sync.test.mjs` and `tests/themes.test.mjs` are not wired into
+  `npm test`, and CI runs only `build:pages` — neither `lint` nor `test`.

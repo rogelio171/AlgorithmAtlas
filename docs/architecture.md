@@ -10,7 +10,7 @@ AlgorithmAtlas/
 │   ├── AlgorithmLab.tsx        "use client" — all UI state and layout
 │   ├── algorithmData.ts        Catalog of 13 algorithm definitions
 │   ├── simulation.ts           Trace builders: AlgorithmDefinition + input → SimFrame[]
-│   ├── CubeScene.tsx           Three.js renderer, driven by the current SimFrame
+│   ├── CubeStage.tsx           Animated 2D stage, driven by the current SimFrame
 │   ├── SyntaxCode.tsx          Regex tokenizer + highlighted <pre> listing
 │   ├── codeSamples.ts          Merges and compiles the curated samples
 │   ├── code/
@@ -20,8 +20,7 @@ AlgorithmAtlas/
 │   │   ├── trees.ts            Marker-annotated samples: trees
 │   │   ├── graphs.ts           Marker-annotated samples: graphs
 │   │   └── recursion.ts        Marker-annotated samples: recursion
-│   ├── themes.ts               Ten theme definitions: labels, swatches, Three.js scene palettes
-│   ├── cubeCache.ts            Cube visual signature used to invalidate label textures
+│   ├── themes.ts               Ten theme definitions: labels and picker swatches
 │   ├── chatgpt-auth.ts         Dormant ChatGPT header auth helpers
 │   └── globals.css             The entire visual system
 ├── github-pages/               Static SPA entry for the GitHub Pages build
@@ -55,13 +54,12 @@ page.tsx
        ├─ codeSamples.ts ──── getCodeSample()  → CodeSample
        │    ├─ code/{search,sorting,trees,graphs,recursion}.ts (§marker§ sources)
        │    └─ code/sample.ts (compileSample)
-       ├─ CubeScene.tsx ───── Three.js; imports graphEdges + SimFrame from simulation.ts
-       │    └─ cubeCache.ts  (cubeVisualSignature)
+       ├─ CubeStage.tsx ───── DOM/SVG stage; imports graphEdges + SimFrame from simulation.ts
        └─ SyntaxCode.tsx ──── tokenizer; imports Language + CodeSample types
 ```
 
 There are no circular imports. `simulation.ts` and `algorithmData.ts` are pure
-and framework-free, which is what lets `tests/cube-cache.test.mjs` import them
+and framework-free, which is what lets `tests/code-sync.test.mjs` import them
 directly with Node's TypeScript stripping.
 
 ## Data flow
@@ -77,7 +75,7 @@ directly with Node's TypeScript stripping.
 3. **Frame selection.** `safeStep = min(step, trace.length - 1)` guards against a
    stale index after a shorter trace is built; `current = trace[safeStep]`.
 4. **Rendering.** `current` drives three consumers simultaneously:
-   - `CubeScene` diffs it against the live Three.js scene graph,
+   - `CubeStage` diffs it against the live DOM and animates each cube,
    - the caption/legend/live-state panels read `message`, `detail`, `phase`,
      `pointers`, `frontier`, `visited`,
    - `current.codeKey` looks up `sample.highlights[codeKey]` to decide which
@@ -111,9 +109,13 @@ is what actually ships to the public demo.
   copies the `active`/`settled`/`dimmed` arrays, so trace builders are free to
   mutate their working array in place (bubble sort literally swaps elements).
 - **Cube identity is stable.** Items carry an `id` (`item-3`, `node-2`, `A`,
-  `call-5`). The renderer keys meshes by id, so a swap animates as two cubes
+  `call-5`). React keys the cube elements by id, so a swap animates as two cubes
   gliding rather than two labels blinking.
-- **The Three.js scene is created once.** One effect (empty dep array) builds
-  the renderer, lights, floor, grid, and animation loop; a second effect reacts
-  to `[algorithm, frame]` and only updates targets. Interpolation toward those
-  targets happens in the render loop, which is what produces the motion.
+- **React owns the elements; rAF owns the motion.** `CubeStage` renders one
+  absolutely positioned element per cube and never re-renders during an
+  animation. A layout effect compares each cube's live position against its new
+  target and drives `transform` from a `requestAnimationFrame` loop, so motion
+  is never interrupted by React's render cycle.
+- **The stage is resolution-independent.** Everything is laid out in a fixed
+  660×360 logical space; a `ResizeObserver` scales the wrapper to fit, so one
+  set of coordinates works at every breakpoint.
