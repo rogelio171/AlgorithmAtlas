@@ -5,6 +5,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { AlgorithmDefinition } from "./algorithmData";
 import { cubeVisualSignature } from "./cubeCache";
 import { graphEdges, type SimFrame } from "./simulation";
+import type { ScenePalette } from "./themes";
 
 type CubeBundle = {
   group: THREE.Group;
@@ -26,6 +27,7 @@ type SceneState = {
   cubes: Map<string, CubeBundle>;
   frame: SimFrame;
   algorithm: AlgorithmDefinition;
+  palette: ScenePalette;
 };
 
 const graphPositions: Record<string, [number, number, number]> = {
@@ -33,12 +35,12 @@ const graphPositions: Record<string, [number, number, number]> = {
   D: [1.1, 1.15, 0], E: [1.1, -1.5, 0], F: [3.2, 0, 0],
 };
 
-function labelTexture(text: string) {
+function labelTexture(text: string, palette: ScenePalette) {
   const canvas = document.createElement("canvas");
   canvas.width = 256; canvas.height = 128;
   const context = canvas.getContext("2d")!;
-  context.fillStyle = "rgba(21,22,30,.9)"; context.fillRect(0, 0, 256, 128);
-  context.fillStyle = "#c0caf5";
+  context.fillStyle = palette.labelBg; context.fillRect(0, 0, 256, 128);
+  context.fillStyle = palette.labelText;
   context.font = text.length > 5 ? "600 34px monospace" : "700 52px monospace";
   context.textAlign = "center"; context.textBaseline = "middle";
   context.fillText(text, 128, 66);
@@ -47,27 +49,27 @@ function labelTexture(text: string) {
   return texture;
 }
 
-function createCube(item: SimFrame["items"][number]) {
+function createCube(item: SimFrame["items"][number], palette: ScenePalette) {
   const group = new THREE.Group();
   const geometry = new THREE.BoxGeometry(1, 1, 1, 4, 4, 4);
-  const material = new THREE.MeshStandardMaterial({ color: 0x414868, roughness: .28, metalness: .15, emissive: 0x15161e, emissiveIntensity: .6 });
+  const material = new THREE.MeshStandardMaterial({ color: palette.cubeBase, roughness: .28, metalness: .15, emissive: palette.emissive, emissiveIntensity: .6 });
   const body = new THREE.Mesh(geometry, material);
   body.castShadow = true; body.receiveShadow = true; group.add(body);
-  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: 0x7aa2f7, transparent: true, opacity: .35 }));
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: palette.cubeEdge, transparent: true, opacity: .35 }));
   group.add(edges);
-  const label = new THREE.Mesh(new THREE.PlaneGeometry(.72, .36), new THREE.MeshBasicMaterial({ map: labelTexture(item.label), transparent: true }));
+  const label = new THREE.Mesh(new THREE.PlaneGeometry(.72, .36), new THREE.MeshBasicMaterial({ map: labelTexture(item.label, palette), transparent: true }));
   label.position.set(0, 0, .506); group.add(label);
   return {
     group, body, label, visualSignature: cubeVisualSignature(item), target: new THREE.Vector3(),
-    targetScale: new THREE.Vector3(1, 1, 1), targetColor: new THREE.Color(0x414868),
+    targetScale: new THREE.Vector3(1, 1, 1), targetColor: new THREE.Color(palette.cubeBase),
   };
 }
 
-function refreshCubeLabel(cube: CubeBundle, item: SimFrame["items"][number]) {
+function refreshCubeLabel(cube: CubeBundle, item: SimFrame["items"][number], palette: ScenePalette) {
   const nextSignature = cubeVisualSignature(item);
   if (cube.visualSignature === nextSignature) return;
   cube.label.material.map?.dispose();
-  cube.label.material.map = labelTexture(item.label);
+  cube.label.material.map = labelTexture(item.label, palette);
   cube.label.material.needsUpdate = true;
   cube.visualSignature = nextSignature;
 }
@@ -104,7 +106,7 @@ function rebuildLinks(current: SceneState, algorithm: AlgorithmDefinition, frame
   current.links.clear();
   const connect = (from: THREE.Vector3, to: THREE.Vector3, active = false) => {
     const geometry = new THREE.BufferGeometry().setFromPoints([from, to]);
-    const material = new THREE.LineBasicMaterial({ color: active ? 0x7dcfff : 0x414868, transparent: true, opacity: active ? .95 : .58 });
+    const material = new THREE.LineBasicMaterial({ color: active ? current.palette.linkActive : current.palette.link, transparent: true, opacity: active ? .95 : .58 });
     current.links.add(new THREE.Line(geometry, material));
   };
   if (algorithm.structure === "graph") {
@@ -123,15 +125,16 @@ function rebuildLinks(current: SceneState, algorithm: AlgorithmDefinition, frame
   }
 }
 
-export function CubeScene({ algorithm, frame, playing }: { algorithm: AlgorithmDefinition; frame: SimFrame; playing: boolean }) {
+export function CubeScene({ algorithm, frame, playing, palette }: { algorithm: AlgorithmDefinition; frame: SimFrame; playing: boolean; palette: ScenePalette }) {
   const host = useRef<HTMLDivElement>(null), state = useRef<SceneState | null>(null);
   const initialFrame = useRef(frame), initialAlgorithm = useRef(algorithm), playingRef = useRef(playing);
   useEffect(() => { playingRef.current = playing; }, [playing]);
+  useEffect(() => { initialFrame.current = frame; initialAlgorithm.current = algorithm; }, [frame, algorithm]);
   useEffect(() => {
     if (!host.current) return;
     const element = host.current, scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x15161e);
-    scene.fog = new THREE.Fog(0x15161e, 10, 22);
+    scene.background = new THREE.Color(palette.stage);
+    scene.fog = new THREE.Fog(palette.stage, 10, 22);
     const camera = new THREE.PerspectiveCamera(40, element.clientWidth / Math.max(element.clientHeight, 1), .1, 100);
     camera.position.set(0, 4.6, 9.3); camera.lookAt(0, 0, 0);
     let renderer: THREE.WebGLRenderer;
@@ -145,13 +148,13 @@ export function CubeScene({ algorithm, frame, playing }: { algorithm: AlgorithmD
     controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 6; controls.maxDistance = 14;
     controls.maxPolarAngle = Math.PI * .63; controls.target.set(0, 0, 0);
     const world = new THREE.Group(), links = new THREE.Group(); scene.add(links, world);
-    scene.add(new THREE.HemisphereLight(0x7dcfff, 0x15161e, 2.1));
-    const key = new THREE.SpotLight(0x7aa2f7, 42, 30, .65, .55, 1.3); key.position.set(4, 8, 6); key.castShadow = true; scene.add(key);
-    const rim = new THREE.PointLight(0xbb9af7, 28, 18); rim.position.set(-5, 3, -2); scene.add(rim);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 20), new THREE.MeshStandardMaterial({ color: 0x1a1b26, roughness: .9, metalness: .05 }));
+    scene.add(new THREE.HemisphereLight(palette.hemi[0], palette.hemi[1], 2.1));
+    const key = new THREE.SpotLight(palette.spot, 42, 30, .65, .55, 1.3); key.position.set(4, 8, 6); key.castShadow = true; scene.add(key);
+    const rim = new THREE.PointLight(palette.rim, 28, 18); rim.position.set(-5, 3, -2); scene.add(rim);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 20), new THREE.MeshStandardMaterial({ color: palette.floor, roughness: .9, metalness: .05 }));
     floor.rotation.x = -Math.PI / 2; floor.position.y = -2.55; floor.receiveShadow = true; scene.add(floor);
-    const grid = new THREE.GridHelper(18, 18, 0x414868, 0x24283b); grid.position.y = -2.5; scene.add(grid);
-    state.current = { scene, camera, renderer, controls, world, links, cubes: new Map(), frame: initialFrame.current, algorithm: initialAlgorithm.current };
+    const grid = new THREE.GridHelper(18, 18, palette.grid[0], palette.grid[1]); grid.position.y = -2.5; scene.add(grid);
+    state.current = { scene, camera, renderer, controls, world, links, cubes: new Map(), frame: initialFrame.current, algorithm: initialAlgorithm.current, palette };
     let request = 0;
     const render = () => {
       const current = state.current;
@@ -181,11 +184,11 @@ export function CubeScene({ algorithm, frame, playing }: { algorithm: AlgorithmD
       });
       state.current = null;
     };
-  }, []);
+  }, [palette]);
 
   useEffect(() => {
     const current = state.current; if (!current) return;
-    current.frame = frame; current.algorithm = algorithm;
+    current.frame = frame; current.algorithm = algorithm; current.palette = palette;
     rebuildLinks(current, algorithm, frame);
     const live = new Set(frame.items.map(item => item.id));
     for (const [id, cube] of current.cubes) {
@@ -196,22 +199,22 @@ export function CubeScene({ algorithm, frame, playing }: { algorithm: AlgorithmD
     frame.items.forEach((item, index) => {
       let cube = current.cubes.get(item.id);
       if (!cube) {
-        cube = createCube(item); cube.group.name = item.id;
+        cube = createCube(item, palette); cube.group.name = item.id;
         cube.group.position.copy(cubePosition(algorithm, item, index, frame.items.length)).add(new THREE.Vector3(0, -2, 0));
         current.world.add(cube.group); current.cubes.set(item.id, cube);
       }
-      refreshCubeLabel(cube, item);
+      refreshCubeLabel(cube, item, palette);
       cube.target.copy(cubePosition(algorithm, item, index, frame.items.length));
       const active = frame.active.includes(item.id);
       const settled = frame.settled.includes(item.id);
       const dimmed = frame.dimmed.includes(item.id);
       if (active) cube.target.y += .55;
       cube.targetScale.setScalar(active ? 1.15 : dimmed ? .78 : 1);
-      cube.targetColor.set(active ? 0xe0af68 : settled ? 0x9ece6a : dimmed ? 0x292e42 : 0x7aa2f7);
+      cube.targetColor.set(active ? palette.active : settled ? palette.settled : dimmed ? palette.dimmed : palette.pending);
       cube.body.material.opacity = dimmed ? .38 : 1;
       cube.body.material.transparent = dimmed;
     });
-  }, [algorithm, frame]);
+  }, [algorithm, frame, palette]);
 
   return <div className="three-stage" ref={host} aria-label={`Three-dimensional ${algorithm.title} simulation`} />;
 }

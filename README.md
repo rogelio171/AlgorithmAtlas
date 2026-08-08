@@ -26,6 +26,7 @@ simulation.
 - TypeScript, Python, Go, and Java implementations
 - Play, pause, previous, next, reset, and playback-speed controls
 - Custom inputs, example presets, and algorithm-specific variants
+- Ten switchable visual themes (Tokyo Night default), persisted per visitor
 - Responsive desktop and mobile layouts
 
 ## Run locally

@@ -20,6 +20,7 @@ AlgorithmAtlas/
 │   │   ├── trees.ts            Marker-annotated samples: trees
 │   │   ├── graphs.ts           Marker-annotated samples: graphs
 │   │   └── recursion.ts        Marker-annotated samples: recursion
+│   ├── themes.ts               Ten theme definitions: labels, swatches, Three.js scene palettes
 │   ├── cubeCache.ts            Cube visual signature used to invalidate label textures
 │   ├── chatgpt-auth.ts         Dormant ChatGPT header auth helpers
 │   └── globals.css             The entire visual system

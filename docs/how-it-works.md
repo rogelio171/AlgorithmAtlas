@@ -167,12 +167,16 @@ and damp back to rest when paused.
 
 ### State colours
 
-| State | Colour | Extra |
-| --- | --- | --- |
-| Active | `0xe0af68` (yellow) | scale ×1.15, lifted `+0.55` on Y, rotating |
-| Settled | `0x9ece6a` (green) | — |
-| Dimmed | `0x292e42` | scale ×0.78, `opacity 0.38`, transparent |
-| Default | `0x7aa2f7` (blue) | — |
+All scene colours come from the active theme's `ScenePalette` (`app/themes.ts`),
+passed into `CubeScene` as a prop; changing the theme rebuilds the scene.
+Tokyo Night defaults:
+
+| State | Palette key | Tokyo Night | Extra |
+| --- | --- | --- | --- |
+| Active | `active` | `0xe0af68` (yellow) | scale ×1.15, lifted `+0.55` on Y, rotating |
+| Settled | `settled` | `0x9ece6a` (green) | — |
+| Dimmed | `dimmed` | `0x292e42` | scale ×0.78, `opacity 0.38`, transparent |
+| Default | `pending` | `0x7aa2f7` (blue) | — |
 
 ### Label textures and the cube cache
 

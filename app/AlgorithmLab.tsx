@@ -5,8 +5,15 @@ import { getCodeSample } from "./codeSamples";
 import { buildSimulation } from "./simulation";
 import { CubeScene } from "./CubeScene";
 import { SyntaxCode } from "./SyntaxCode";
+import { defaultThemeId, isThemeId, themeById, themes, type ThemeId } from "./themes";
 
 const initial = algorithms[0];
+const THEME_STORAGE_KEY = "atlas-theme";
+
+function themeSwatch(id: ThemeId) {
+  const [ground, accent] = themeById[id].dot;
+  return { background: `linear-gradient(135deg, ${ground} 50%, ${accent} 50%)` };
+}
 
 export default function AlgorithmLab() {
   const [selected, setSelected] = useState(initial.id);
@@ -17,11 +24,23 @@ export default function AlgorithmLab() {
   const [step, setStep] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
+  const [theme, setTheme] = useState<ThemeId>(defaultThemeId);
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const algorithm = algorithms.find(item => item.id === selected) ?? initial;
   const trace = useMemo(() => buildSimulation(algorithm, input, variant), [algorithm, input, variant]);
   const safeStep = Math.min(step, trace.length - 1), current = trace[safeStep];
   const sample = useMemo(() => getCodeSample(algorithm.id, language), [algorithm.id, language]);
   const activeLines = sample.highlights[current.codeKey] ?? sample.highlights.setup ?? [1];
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (saved && isThemeId(saved)) setTheme(saved);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
 
   useEffect(() => {
     if (!playing) return;
@@ -43,7 +62,24 @@ export default function AlgorithmLab() {
   return <main className="app-shell">
     <header className="topbar">
       <div className="brand"><span className="brand-mark">AA</span><div><strong>Algorithm Atlas</strong><small>Interactive algorithm laboratory</small></div></div>
-      <div className="header-meta"><span><i /> simulation online</span><span>13 algorithms · 4 languages</span><button onClick={() => { setStep(0); setPlaying(true); }}>Run lesson</button></div>
+      <div className="header-meta">
+        <span><i /> simulation online</span><span>13 algorithms · 4 languages</span>
+        <div className="theme-picker" onKeyDown={event => { if (event.key === "Escape") setThemeMenuOpen(false); }}>
+          <button aria-haspopup="menu" aria-expanded={themeMenuOpen} onClick={() => setThemeMenuOpen(value => !value)}>
+            <i className="swatch" style={themeSwatch(theme)} />{themeById[theme].label}
+          </button>
+          {themeMenuOpen && <>
+            <div className="theme-backdrop" onClick={() => setThemeMenuOpen(false)} />
+            <div className="theme-menu" role="menu" aria-label="Theme">
+              {themes.map(item => <button key={item.id} role="menuitem" className={item.id === theme ? "active" : ""}
+                onClick={() => { setTheme(item.id); setThemeMenuOpen(false); }}>
+                <i className="swatch" style={themeSwatch(item.id)} />{item.label}
+              </button>)}
+            </div>
+          </>}
+        </div>
+        <button onClick={() => { setStep(0); setPlaying(true); }}>Run lesson</button>
+      </div>
     </header>
     <section className="intro">
       <div><p className="eyebrow">PHASE 01 · MOTION EXPLAINS THE CODE</p><h1>See the state change.<br /><em>Understand the algorithm.</em></h1></div>
@@ -68,7 +104,7 @@ export default function AlgorithmLab() {
         </div>
         <div className="simulation-card">
           <div className="card-top"><span><i /> LIVE CUBE TRACE</span><b>{String(safeStep + 1).padStart(2, "0")} / {String(trace.length).padStart(2, "0")}</b></div>
-          <CubeScene algorithm={algorithm} frame={current} playing={playing} />
+          <CubeScene algorithm={algorithm} frame={current} playing={playing} palette={themeById[theme].scene} />
           <div className="scene-caption"><small>{current.phase}</small><strong>{current.message}</strong><span>{current.detail}</span></div>
           <div className="scene-legend"><span><i className="active-cube" />Active</span><span><i className="settled-cube" />Resolved</span><span><i className="pending-cube" />Pending</span></div>
         </div>
@@ -105,6 +141,6 @@ export default function AlgorithmLab() {
         </div>
       </aside>
     </section>
-    <footer><span>ALGORITHM ATLAS · PHASE 01</span><span>Three.js cube simulation engine</span><span>Tokyo Night visual system</span></footer>
+    <footer><span>ALGORITHM ATLAS · PHASE 01</span><span>Three.js cube simulation engine</span><span>{themeById[theme].label} visual system</span></footer>
   </main>;
 }

@@ -107,8 +107,9 @@ The existing code has a distinctive, deliberately compact style. Match it:
 ## Working on the 3D scene
 
 - Colour changes need to happen in **two places** to stay consistent: the CSS
-  custom properties in `app/globals.css` and the numeric literals in
-  `CubeScene.tsx`.
+  token block in `app/globals.css` and the matching `ScenePalette` in
+  `app/themes.ts` (the Three.js side). `tests/themes.test.mjs` checks every
+  theme has both halves.
 - Any new geometry, material, or texture must be disposed. Follow the existing
   pattern: `disposeCube()`, the link-rebuild traversal, and the cleanup function
   of the setup effect.

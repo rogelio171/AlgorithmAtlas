@@ -39,13 +39,16 @@ Versions below are the exact pins from `package.json` at the time of writing.
 
 ## Styling
 
-There is no CSS framework in effect. `app/globals.css` (~60 dense lines) is the
-entire visual system:
+There is no CSS framework in effect. `app/globals.css` is the entire visual
+system:
 
-- **Tokyo Night palette** exposed as CSS custom properties on `:root`
-  (`--bg:#1a1b26`, `--blue:#7aa2f7`, `--purple:#bb9af7`, `--green:#9ece6a`,
-  `--yellow:#e0af68`, and friends). The same hex values are duplicated as
-  numeric literals inside `CubeScene.tsx` so the 3D scene matches the DOM.
+- **Ten switchable themes.** Every color flows through semantic CSS custom
+  properties (`--bg`, `--panel`, `--accent`, `--warn`, `--ok`, …) defined on
+  `:root` (Tokyo Night, the default) and overridden per theme in
+  `[data-theme="…"]` blocks. Alpha variants derive via `color-mix`, so themes
+  only redefine base tokens. The matching Three.js scene palettes (background,
+  lights, floor, cube colors) live in `app/themes.ts`; the picker in the top
+  bar sets `data-theme` on `<html>` and persists the choice to `localStorage`.
 - **CSS Grid** workspace (`225px` catalog rail + fluid lab column) that
   collapses to a flex column under 780px.
 - Three responsive breakpoints: 1250px, 780px, 440px.
