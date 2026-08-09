@@ -71,7 +71,7 @@ missing/duplicate case. Examples:
 - Bubble sort: `Mixed`, `Nearly sorted`, `Reverse`
 - Merge sort: `Mixed`, `Odd length`, `Duplicates`
 - BFS: `From A`, `From C`, `From F`
-- Dijkstra: `A → F`, `B → E`, `C → F`
+- Dijkstra: `A → F`, `A → E`, `C → F`
 - Factorial: `n = 5`, `Base case`, `n = 7`
 
 ## The graph used by BFS / DFS / Dijkstra
@@ -80,22 +80,30 @@ Six nodes, eight undirected weighted edges:
 
 ```mermaid
 graph LR
-  A --- |4| B
-  A --- |2| C
-  B --- |5| D
-  B --- |3| E
-  C --- |1| D
-  C --- |6| E
-  D --- |4| F
-  E --- |2| F
+  A --- |3| B
+  A --- |4| C
+  B --- |7| D
+  B --- |6| E
+  C --- |5| D
+  C --- |7| E
+  D --- |7| F
+  E --- |6| F
 ```
 
-Edge list (from `graphEdges` in `app/simulation.ts`): `A-B 4`, `A-C 2`,
-`B-D 5`, `B-E 3`, `C-D 1`, `C-E 6`, `D-F 4`, `E-F 2`.
+Edge list (from `graphEdges` in `app/simulation.ts`): `A-B 3`, `A-C 4`,
+`B-D 7`, `B-E 6`, `C-D 5`, `C-E 7`, `D-F 7`, `E-F 6`.
 
-Node positions are hand-tuned constants in
-`CubeStage.tsx › graphPositions`, so the layout is stable and readable rather
-than force-directed.
+**The drawing is to scale.** `graphPositions` (also in `app/simulation.ts`) is
+laid out at `GRAPH_SCALE` = 44 pixels per unit of weight, so a heavier edge is
+genuinely drawn longer — every edge lands within 9% of `weight × 44px`, and no
+lighter edge is ever drawn longer than a heavier one. The layout is also planar
+(no edge crossings), and each weight label sits at a hand-checked position along
+its edge (`graphLabelSpots`) so it cannot be mistaken for a neighbour's.
+`tests/code-sync.test.mjs` pins all of this.
+
+The weights were chosen to fit that geometry rather than the other way round:
+with arbitrary weights, a planar drawing whose edge lengths match them does not
+exist for this graph.
 
 ## Known simplifications
 

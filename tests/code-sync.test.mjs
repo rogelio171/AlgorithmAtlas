@@ -110,21 +110,48 @@ test("dijkstra reports the shortest path to the requested target", () => {
   const trace = buildSimulation(algorithm, "A | F", "");
   const last = trace.at(-1);
 
-  // A → C → D → F costs 2 + 1 + 4 = 7, beating A → B → E → F (4 + 3 + 2 = 9).
-  assert.deepEqual(last.path, ["A", "C", "D", "F"]);
-  assert.equal(last.distances.F, 7);
-  assert.match(last.message, /A → C → D → F/);
-  assert.match(last.detail, /7/);
+  // A → B → E → F costs 3 + 6 + 6 = 15, beating A → C → D → F (4 + 5 + 7 = 16).
+  assert.deepEqual(last.path, ["A", "B", "E", "F"]);
+  assert.equal(last.distances.F, 15);
+  assert.match(last.message, /A → B → E → F/);
+  assert.match(last.detail, /15/);
 
   // Distances are shown on the cubes themselves throughout.
   assert.equal(trace[0].items.find(item => item.id === "A").badge, "0");
   assert.equal(trace[0].items.find(item => item.id === "F").badge, "∞");
-  assert.equal(last.items.find(item => item.id === "F").badge, "7");
+  assert.equal(last.items.find(item => item.id === "F").badge, "15");
 
   // The target is honoured, not ignored: a different target gives another path.
-  const other = buildSimulation(algorithm, "B | E", "").at(-1);
-  assert.deepEqual(other.path, ["B", "E"]);
-  assert.equal(other.distances.E, 3);
+  const other = buildSimulation(algorithm, "C | F", "").at(-1);
+  assert.deepEqual(other.path, ["C", "D", "F"]);
+  assert.equal(other.distances.F, 12);
+});
+
+test("the graph is drawn to scale: edge length tracks edge weight", async () => {
+  const { graphEdges, graphPositions, GRAPH_SCALE } = await import("../app/simulation.ts");
+
+  // The whole point of a shortest-path lesson is that the picture agrees with
+  // the numbers, so a heavier edge must actually be drawn longer.
+  const drawn = graphEdges.map(([from, to, weight]) => {
+    const a = graphPositions[from], b = graphPositions[to];
+    return { from, to, weight, length: Math.hypot(b.x - a.x, b.y - a.y) };
+  });
+
+  for (const edge of drawn) {
+    const want = edge.weight * GRAPH_SCALE;
+    const error = Math.abs(edge.length - want) / want;
+    assert.ok(error < 0.12, `${edge.from}-${edge.to} (w${edge.weight}) is drawn ${edge.length.toFixed(0)}px, wanted ~${want}px`);
+  }
+
+  // And strictly monotonic: no lighter edge is ever drawn longer than a heavier one.
+  for (const a of drawn) {
+    for (const b of drawn) {
+      if (a.weight < b.weight) {
+        assert.ok(a.length < b.length,
+          `${a.from}-${a.to} (w${a.weight}) is drawn longer than ${b.from}-${b.to} (w${b.weight})`);
+      }
+    }
+  }
 });
 
 test("dijkstra shows its priority queue and accounts for every node", () => {
@@ -151,9 +178,9 @@ test("dijkstra shows its priority queue and accounts for every node", () => {
   }
 
   // A short run really does skip work — that is the point of the early exit.
-  const short = buildSimulation(algorithm, "B | E", "").at(-1);
-  assert.deepEqual(short.dimmed.sort(), ["A", "C", "D", "F"]);
-  assert.deepEqual(short.settled.sort(), ["B", "E"]);
+  const short = buildSimulation(algorithm, "A | E", "").at(-1);
+  assert.deepEqual(short.dimmed, ["F"]);
+  assert.ok(short.settled.includes("E") && !short.settled.includes("F"));
 });
 
 test("breadth-first search numbers the cubes in visit order", () => {

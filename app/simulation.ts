@@ -38,10 +38,27 @@ export type SimFrame = {
   cols?: number;
 };
 
+// The drawing has to agree with the numbers: each edge is laid out at
+// GRAPH_SCALE pixels per unit of weight, so a heavier edge is visibly longer.
+// tests/code-sync.test.mjs pins that relationship.
+export const GRAPH_SCALE = 44;
+
+export const graphPositions: Record<string, { x: number; y: number }> = {
+  A: { x: 212, y: 134 }, B: { x: 300, y: 52 }, C: { x: 374, y: 190 },
+  D: { x: 598, y: 130 }, E: { x: 62, y: 150 }, F: { x: 315, y: 258 },
+};
+
 export const graphEdges: [string, string, number][] = [
-  ["A", "B", 4], ["A", "C", 2], ["B", "D", 5], ["B", "E", 3],
-  ["C", "D", 1], ["C", "E", 6], ["D", "F", 4], ["E", "F", 2],
+  ["A", "B", 3], ["A", "C", 4], ["B", "D", 7], ["B", "E", 6],
+  ["C", "D", 5], ["C", "E", 7], ["D", "F", 7], ["E", "F", 6],
 ];
+
+// Where each weight label sits: [fraction along the edge, perpendicular
+// offset]. Hand-checked so no label can be mistaken for a neighbouring edge.
+export const graphLabelSpots: Record<string, [number, number]> = {
+  "A-B": [0.5, 16], "A-C": [0.5, -24], "B-D": [0.42, -24], "B-E": [0.66, 24],
+  "C-D": [0.34, -24], "C-E": [0.34, -16], "D-F": [0.5, -24], "E-F": [0.5, 24],
+};
 
 const graphNodes = ["A", "B", "C", "D", "E", "F"];
 const adjacency = Object.fromEntries(graphNodes.map(node => [node, [] as [string, number][]]));

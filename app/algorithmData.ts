@@ -56,7 +56,7 @@ defaultInput:"A",presets:[{"label":"From A","value":"A"},{"label":"From C","valu
 algorithms.push({
 id:"dijkstra",title:"Dijkstra’s shortest path",category:"Graphs",difficulty:"Intermediate",structure:"graph" as StructureKind,
 summary:"Settle the nearest node and relax its edges.",insight:"Settled distances are final.",time:"O((V + E) log V)",space:"O(V)",
-defaultInput:"A | F",presets:[{"label":"A → F","value":"A | F"},{"label":"B → E","value":"B | E"},{"label":"C → F","value":"C | F"}],
+defaultInput:"A | F",presets:[{"label":"A → F","value":"A | F"},{"label":"A → E","value":"A | E"},{"label":"C → F","value":"C | F"}],
 });
 algorithms.push({
 id:"factorial",title:"Factorial recursion",category:"Recursion",difficulty:"Beginner",structure:"recursion" as StructureKind,

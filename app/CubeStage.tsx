@@ -1,16 +1,11 @@
 "use client";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { AlgorithmDefinition } from "./algorithmData";
-import { graphEdges, type SimFrame } from "./simulation";
+import { graphEdges, graphLabelSpots, graphPositions, type SimFrame } from "./simulation";
 
 // All layout happens in a fixed 660×360 logical space; .sim-inner is scaled
 // to fit the visible stage, so positions and motion stay resolution-independent.
 const STAGE_W = 660, STAGE_H = 360, HALF = 26, LIFT = 24;
-
-const graphPositions: Record<string, { x: number; y: number }> = {
-  A: { x: 68, y: 97 }, B: { x: 228, y: 38 }, C: { x: 228, y: 249 },
-  D: { x: 420, y: 94 }, E: { x: 420, y: 269 }, F: { x: 592, y: 170 },
-};
 
 // Horizontal spread of a lane-based (divide-and-conquer) layout, measured once
 // per frame so split runs keep a consistent scale as they fan out.
@@ -207,9 +202,13 @@ export function CubeStage({ algorithm, frame }: { algorithm: AlgorithmDefinition
       const className = onPath.has(key) ? "path"
         : frame.active.includes(from) && frame.active.includes(to) ? "active" : "";
       links.push(<line key={`${from}-${to}`} className={className} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />);
-      // Weights are the whole point of a shortest-path lesson, so label them.
+      // Weights are the whole point of a shortest-path lesson, so label them —
+      // offset along and away from the edge so each number has one clear owner.
       if (weighted) {
-        links.push(<text key={`w-${from}-${to}`} className={className} x={(a.x + b.x) / 2} y={(a.y + b.y) / 2}>{weight}</text>);
+        const [along, away] = graphLabelSpots[key] ?? [0.5, 0];
+        const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+        links.push(<text key={`w-${from}-${to}`} className={className}
+          x={a.x + dx * along - dy / len * away} y={a.y + dy * along + dx / len * away}>{weight}</text>);
       }
     }
   }

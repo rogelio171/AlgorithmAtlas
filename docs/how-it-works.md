@@ -135,14 +135,20 @@ six array algorithms, then by `algorithm.structure` for the rest:
 
 ```ts
 graphEdges = [
-  ["A","B",4], ["A","C",2], ["B","D",5], ["B","E",3],
-  ["C","D",1], ["C","E",6], ["D","F",4], ["E","F",2],
+  ["A","B",3], ["A","C",4], ["B","D",7], ["B","E",6],
+  ["C","D",5], ["C","E",7], ["D","F",7], ["E","F",6],
 ];
 ```
 
 Undirected — `adjacency` is built by inserting each edge in both directions.
 BFS and DFS use only the **start** node. Dijkstra uses both: `"A | F"` asks for
 the shortest path from `A` to `F`, and the trace stops once `F` is settled.
+
+The graph is **drawn to scale**: `graphPositions` places nodes so each edge is
+`GRAPH_SCALE` (44) pixels per unit of weight, so the picture and the numbers
+agree — the shortest route also looks shortest. The layout is planar and each
+weight label has a hand-checked spot (`graphLabelSpots`) clear of every other
+edge.
 
 ---
 
