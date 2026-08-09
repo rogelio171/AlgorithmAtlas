@@ -135,6 +135,70 @@ test("breadth-first search numbers the cubes in visit order", () => {
   assert.match(last.detail, /Visit order: A → /);
 });
 
+test("factorial unwinds, showing each returned value and keeping the answer", () => {
+  const algorithm = algorithms.find(item => item.id === "factorial");
+  for (const [input, expected] of [["5", 120], ["1", 1], ["7", 5040]]) {
+    const trace = buildSimulation(algorithm, input, "");
+    const last = trace.at(-1);
+    const n = Number(input);
+
+    // Every frame stays on screen and resolves — the answer no longer vanishes.
+    assert.equal(last.items.length, n, `n=${input}: the stack was cleared`);
+    assert.equal(last.settled.length, n, `n=${input}: frames were never resolved`);
+    assert.equal(last.active.length, 0, `n=${input}: last frame still active`);
+    assert.equal(last.items.find(item => item.label === `f(${n})`).badge, String(expected));
+    assert.match(last.message, new RegExp(`= ${expected}\\.$`));
+
+    // Return values appear one at a time on the way back up, not all at once.
+    const resolved = trace.map(frame => frame.items.filter(item => item.badge !== undefined).length);
+    assert.equal(resolved[0], 0, `n=${input}: values shown before any call returned`);
+    assert.equal(resolved.at(-1), n, `n=${input}: not every frame ended with a value`);
+    for (let i = 1; i < resolved.length; i++) {
+      assert.ok(resolved[i] - resolved[i - 1] <= 1, `n=${input}: more than one value appeared in a single step`);
+      assert.ok(resolved[i] >= resolved[i - 1], `n=${input}: a returned value disappeared`);
+    }
+  }
+});
+
+test("fibonacci builds a real call tree that returns a real answer", () => {
+  const algorithm = algorithms.find(item => item.id === "fibonacci");
+  const expected = { 3: 2, 5: 5, 6: 8 };
+  for (const [input, answer] of Object.entries(expected)) {
+    const trace = buildSimulation(algorithm, input, "");
+    const last = trace.at(-1);
+    const root = last.items.find(item => !item.parent);
+
+    // It computes the value instead of stopping mid-expansion.
+    assert.equal(root.badge, String(answer), `fib(${input}) came out wrong`);
+    assert.match(last.message, new RegExp(`fib\\(${input}\\) = ${answer}\\.`));
+    assert.equal(last.dimmed.length, 0, `fib(${input}): calls were left unvisited`);
+    assert.equal(last.settled.length, last.items.length, `fib(${input}): not every call returned`);
+
+    // It is a tree: exactly one root, every other node has a live parent, and
+    // node count matches the real number of calls fib(n) makes.
+    const ids = new Set(last.items.map(item => item.id));
+    assert.equal(last.items.filter(item => !item.parent).length, 1);
+    for (const item of last.items) if (item.parent) assert.ok(ids.has(item.parent));
+    const calls = n => (n <= 1 ? 1 : 1 + calls(n - 1) + calls(n - 2));
+    assert.equal(last.items.length, calls(Number(input)), `fib(${input}): wrong number of calls`);
+
+    // The call stack stays shallow even though the tree is wide.
+    const deepest = Math.max(...trace.map(frame => frame.frontier?.length ?? 0));
+    assert.ok(deepest <= Number(input), `fib(${input}): stack grew to ${deepest}`);
+  }
+});
+
+test("fibonacci marks the subtrees it recomputes", () => {
+  const algorithm = algorithms.find(item => item.id === "fibonacci");
+  const last = buildSimulation(algorithm, "5", "").at(-1);
+  assert.equal(last.items.filter(item => item.repeat).length, 3);
+  assert.match(last.detail, /3 subtrees recomputed/);
+
+  // fib(3) has no repeated subtree, so nothing should be flagged.
+  const small = buildSimulation(algorithm, "3", "").at(-1);
+  assert.equal(small.items.filter(item => item.repeat).length, 0);
+});
+
 test("cube ids stay stable across a trace so moves animate instead of teleporting", () => {
   const algorithm = algorithms.find(item => item.id === "bubble-sort");
   const trace = buildSimulation(algorithm, algorithm.defaultInput, "");

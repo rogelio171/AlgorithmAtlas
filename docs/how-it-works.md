@@ -13,8 +13,10 @@ the **code panel**. They share one contract — the `SimFrame`.
 type CubeItem = {
   id: string; label: string; value?: number;
   slot?: number;                     // tree position (implicit heap index)
-  lane?: number; col?: number;       // divide-and-conquer row / column
-  badge?: string;                    // corner annotation (distance, visit order)
+  lane?: number; col?: number;       // tree row / column
+  badge?: string;                    // corner annotation (distance, visit no., return value)
+  parent?: string;                   // call-tree branch, drawn as a link
+  repeat?: boolean;                  // a subtree being recomputed
 };
 
 type SimFrame = {
@@ -31,7 +33,8 @@ type SimFrame = {
   visited?:  string[];
   distances?: Record<string, number>;
   path?:     string[];               // result path; its edges render highlighted
-  lanes?:    number;                 // trace-wide lane count, for stable sizing
+  lanes?:    number;                 // trace-wide lane count \
+  cols?:     number;                 //   and column span, for stable sizing
 };
 ```
 
@@ -72,7 +75,8 @@ six array algorithms, then by `algorithm.structure` for the rest:
 | `quick-sort` | `quickTrace` |
 | `structure === "tree"` | `treeTrace` |
 | `structure === "graph"` | `graphTrace` (delegates to `dijkstraTrace`) |
-| otherwise | `recursionTrace` (delegates to `fibonacciTrace`) |
+| `factorial` | `factorialTrace` |
+| otherwise | `fibonacciTrace` |
 
 ### What each builder emits
 
@@ -110,9 +114,17 @@ six array algorithms, then by `algorithm.structure` for the rest:
   with one `path` frame per hop and ends on a `done` frame carrying the full
   path and its total distance. Every cube wears its current best distance as a
   badge, and `distances`/`path` ride along on the frames.
-- **Recursion** — factorial pushes a `f(n)` cube per call down to the base case,
-  then unwinds multiplying as it pops. Fibonacci expands an explicit call list
-  and is **capped at 16 frames** so the exponential tree stays watchable.
+- **Factorial** — a real call stack. Each call pushes a frame one lane deeper;
+  the base case stops the descent; then the stack unwinds, and each frame gets
+  its returned value as a badge (`f(3)` → 6) as it resolves. Frames are never
+  removed, so the finished stack still reads `f(5) = 120`.
+- **Fibonacci** — a real call tree. The whole tree is laid out up front and left
+  dimmed; a depth-first walk un-dims each node as it is called and badges it
+  with its return value as it returns, so values visibly bubble to the root.
+  `frontier` carries the live call stack, which stays shallow (depth ≤ n) even
+  as the tree grows wide. Any subtree computed more than once is flagged with
+  `repeat`, and the final frame reports how many were recomputed — the point of
+  the lesson. Input is clamped to 6 (25 calls); nothing is truncated.
 
 ### The fixed graph
 
@@ -154,10 +166,12 @@ recomputed on resize.
 | Structure | Placement |
 | --- | --- |
 | `array` | A centred row at `y = 190`, pitch `66` |
-| `array` + lanes | Divide-and-conquer tree: row `y` from the trace-wide `lanes` count, `x` from `col` |
+| any + lanes | Tree: row `y` from the trace-wide `lanes` count, `x` from `col`. Used by merge sort's split tree and both recursion lessons |
 | `tree` | Level `floor(log2(slot+1))`; width halves each level from `560`; `y = 70 + level × 84` |
 | `graph` | Fixed hand-tuned coordinates in `graphPositions` (A–F) |
-| `recursion` | A stack growing upward from `y = 320`, pitch capped at `44` |
+Cubes shrink to fit dense trees instead of overlapping: the size is derived
+once per trace from `lanes` and `cols`, so it never changes mid-trace. `fib(6)`
+draws 25 nodes at 33px with no overlap.
 
 ### The motion model
 
@@ -286,7 +300,9 @@ in `activeLines` get `.active` — a yellow left border and a gradient wash.
 | VISITED row | `frame.visited` |
 | DISTANCES row | `frame.distances` (Dijkstra) |
 | SHORTEST PATH row | `frame.path` (Dijkstra) |
-| Cube corner badge | `item.badge` — a Dijkstra distance or a BFS/DFS visit number |
+| Cube corner badge | `item.badge` — a Dijkstra distance, a BFS/DFS visit number, or a recursion return value |
+| Purple ring on a cube | `item.repeat` — a subtree being recomputed |
+| Thin link between cubes | `item.parent` — a recursion call-tree branch |
 | Thick green edges | consecutive pairs in `frame.path` |
 | INVARIANT row | `algorithm.insight` (static per algorithm) |
 | TIME / SPACE badges | `algorithm.time` / `algorithm.space` |

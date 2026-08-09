@@ -55,7 +55,7 @@ structure.
 | array (sorting) | `values` | `7, 3, 9, 2, 6` | Anything after `\|` is ignored |
 | tree | `level-order values \| key` | `8, 4, 12, 2, 6, 10, 14 \| 6` | Values fill an implicit heap array: children of slot `i` are `2i+1`, `2i+2` |
 | graph | `start \| end` | `A \| F` | Only the first character of each side is read. BFS/DFS use the start only; Dijkstra uses both. The graph itself is fixed |
-| recursion | `n` | `5` | Clamped to `1…7` |
+| recursion | `n` | `5` | Factorial clamps to `1…7`; Fibonacci to `1…6` (25 calls) |
 
 Two limits are enforced by `parseInput`: at most **9 values**, and non-numeric
 entries are silently dropped. Every algorithm has a built-in fallback dataset,
@@ -104,8 +104,6 @@ These are deliberate scope choices, documented so they are not mistaken for bugs
 - **BST variants do not change the trace.** `Search`, `Insert`, and `Delete` all
   animate the same root-to-target comparison walk; only the caption text differs.
   Insert and delete rebalancing are not simulated.
-- **Fibonacci is truncated.** The call expansion stops after 16 frames, so large
-  `n` shows a representative slice of the recursion tree, not the whole thing.
 - **Tree input is level-order into a perfect-shape array.** Feeding values that
   do not form a valid BST will render a tree, but the BST comparison walk will
   behave accordingly.

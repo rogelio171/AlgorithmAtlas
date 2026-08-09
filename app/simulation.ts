@@ -9,8 +9,12 @@ export type CubeItem = {
   // the horizontal position, so split runs physically separate on the stage.
   lane?: number;
   col?: number;
-  // Small corner annotation, e.g. a Dijkstra distance or a visit order.
+  // Small corner annotation, e.g. a Dijkstra distance or a returned value.
   badge?: string;
+  // Id of this cube's parent, drawn as a link (recursion call trees).
+  parent?: string;
+  // Marks a subtree the algorithm is computing for a second time.
+  repeat?: boolean;
 };
 
 export type SimFrame = {
@@ -28,9 +32,10 @@ export type SimFrame = {
   distances?: Record<string, number>;
   // Ordered node ids whose connecting edges are the highlighted result path.
   path?: string[];
-  // Total lanes used across the whole trace, so the stage can size the split
-  // tree once instead of letting rows drift as the recursion deepens.
+  // Total lanes (rows) and column span used across the whole trace, so the
+  // stage sizes a tree once instead of letting it drift as the shape changes.
   lanes?: number;
+  cols?: number;
 };
 
 export const graphEdges: [string, string, number][] = [
@@ -235,7 +240,9 @@ function mergeTrace(raw: string) {
   order.forEach((cube, index) => { cube.lane = 0; cube.col = index; });
   shot("The array is sorted.", `Final order: [${run(order)}].`, "done", "Complete", [], order.map(cube => cube.id));
   const lanes = Math.max(...frames.flatMap(frame => frame.items.map(item => item.lane ?? 0))) + 1;
-  for (const frame of frames) frame.lanes = lanes;
+  const spread = frames.flatMap(frame => frame.items.map(item => item.col ?? 0));
+  const cols = Math.max(1, Math.max(...spread) - Math.min(...spread));
+  for (const frame of frames) { frame.lanes = lanes; frame.cols = cols; }
   return frames;
 }
 
@@ -365,39 +372,131 @@ function dijkstraTrace(items: CubeItem[], start: string, end: string) {
   return frames;
 }
 
-function recursionTrace(algorithm: AlgorithmDefinition, raw: string) {
-  const number = Math.max(1, Math.min(7, Number(raw) || 5));
-  const stack: CubeItem[] = [], frames: SimFrame[] = [];
-  if (algorithm.id === "factorial") {
-    for (let value = number; value >= 1; value--) {
-      stack.push({ id: `call-${value}`, label: `f(${value})`, value });
-      const base = value === 1;
-      frames.push(snapshot(stack, base ? "Reach the base case." : `Call factorial(${value - 1}).`, base ? "factorial(1) returns 1." : `${value} waits on the frame below it.`, base ? "base" : "recurse", base ? "Base case" : "Call", [stack.at(-1)!.id], [], [], { frontier: stack.map(item => item.label) }));
+function factorialTrace(raw: string) {
+  const n = Math.max(1, Math.min(7, Number(raw) || 5));
+  const cubes: CubeItem[] = [];
+  const frames: SimFrame[] = [];
+  const shot = (message: string, detail: string, codeKey: string, phase: string, active: string[], settled: string[]) =>
+    frames.push(snapshot(cubes, message, detail, codeKey, phase, active, settled, [], { frontier: cubes.map(cube => cube.label) }));
+
+  // Descend: one frame per call, each suspended until the one below returns.
+  for (let value = n; value >= 1; value--) {
+    const id = `call-${value}`;
+    cubes.push({ id, label: `f(${value})`, value, lane: n - value, col: 0 });
+    if (value === 1) {
+      shot("Reach the base case.", "factorial(1) returns 1 without recursing further.", "base", "Base case", [id], []);
+    } else {
+      shot(`factorial(${value}) calls factorial(${value - 1}).`, "This frame is suspended until the call below returns.",
+        value === n ? "setup" : "recurse", "Call", [id], []);
     }
-    let result = 1;
-    for (let value = 1; value <= number; value++) {
-      result *= value; const active = stack.at(-1)?.id;
-      frames.push(snapshot(stack, `Return ${result}.`, `Resolve ${value} × ${result / value}.`, "return", "Unwind", active ? [active] : [], [], [], { frontier: stack.map(item => item.label) }));
-      stack.pop();
-    }
-  } else {
-    return fibonacciTrace(number, stack, frames);
   }
-  frames.push(snapshot([], "Recursion complete.", "The call stack is empty.", "done", "Complete"));
+
+  // Unwind: each frame resolves and keeps its returned value on screen.
+  let result = 1;
+  const settled: string[] = [];
+  for (let value = 1; value <= n; value++) {
+    result *= value;
+    const cube = cubes.find(item => item.id === `call-${value}`)!;
+    cube.badge = String(result);
+    settled.push(cube.id);
+    shot(
+      value === 1 ? "factorial(1) = 1." : `factorial(${value}) = ${value} × ${result / value} = ${result}.`,
+      value === n ? "The outermost frame now holds the answer." : `Return ${result} up to factorial(${value + 1}).`,
+      "return", "Return", [cube.id], [...settled],
+    );
+  }
+  shot(`factorial(${n}) = ${result}.`, "Every frame resolved, and the answer stays on the stack.", "done", "Complete", [], [...settled]);
+
+  for (const frame of frames) { frame.lanes = n; frame.cols = 1; }
   return frames;
 }
 
-function fibonacciTrace(number: number, stack: CubeItem[], frames: SimFrame[]) {
-  const calls = [number]; let serial = 0;
-  while (calls.length && serial < 16) {
-    const value = calls.pop()!;
-    const item = { id: `call-${serial++}`, label: `fib(${value})`, value };
-    stack.push(item);
-    const base = value <= 1;
-    frames.push(snapshot(stack, base ? `Base case returns ${value}.` : `Expand fib(${value}).`, base ? "This branch stops." : `Create fib(${value - 1}) and fib(${value - 2}).`, base ? "base" : "recurse", base ? "Base case" : "Expand", [item.id], [], [], { frontier: stack.map(entry => entry.label) }));
-    if (value > 1) calls.push(value - 2, value - 1);
-  }
-  frames.push(snapshot([], "Recursion tree explored.", "The sampled call stack is complete.", "done", "Complete"));
+type CallNode = { id: string; value: number; depth: number; parent?: string; kids: CallNode[]; x: number; result: number };
+
+function fibonacciTrace(raw: string) {
+  const n = Math.max(1, Math.min(6, Number(raw) || 5));
+  let serial = 0;
+  const nodes: CallNode[] = [];
+  const build = (value: number, depth: number, parent?: string): CallNode => {
+    const node: CallNode = { id: `call-${serial++}`, value, depth, parent, kids: [], x: 0, result: 0 };
+    nodes.push(node);
+    if (value > 1) node.kids.push(build(value - 1, depth + 1, node.id), build(value - 2, depth + 1, node.id));
+    return node;
+  };
+  const root = build(n, 0);
+
+  // Classic tree layout: each leaf takes the next column, each parent centres
+  // over its two children.
+  let leaf = 0;
+  const place = (node: CallNode) => {
+    if (!node.kids.length) { node.x = leaf++; return; }
+    node.kids.forEach(place);
+    node.x = (node.kids[0].x + node.kids[1].x) / 2;
+  };
+  place(root);
+
+  const cubes: CubeItem[] = nodes.map(node => ({
+    id: node.id, label: `f(${node.value})`, value: node.value,
+    lane: node.depth, col: node.x, parent: node.parent,
+  }));
+  const byId = new Map(cubes.map(cube => [cube.id, cube]));
+  const frames: SimFrame[] = [];
+  const pending = new Set(cubes.map(cube => cube.id));
+  const settled: string[] = [];
+  const stack: string[] = [];
+  const seen = new Map<number, number>();
+  let repeats = 0;
+  const shot = (message: string, detail: string, codeKey: string, phase: string, active: string[]) =>
+    frames.push(snapshot(cubes, message, detail, codeKey, phase, active, [...settled], [...pending], { frontier: [...stack] }));
+
+  shot(`Compute fib(${n}) by recursion.`, "The call tree stays dimmed until each call is actually made.", "setup", "Initialize", []);
+
+  const walk = (node: CallNode) => {
+    pending.delete(node.id);
+    stack.push(`f(${node.value})`);
+    const times = (seen.get(node.value) ?? 0) + 1;
+    seen.set(node.value, times);
+    const repeated = times > 1 && node.value > 1;
+    if (repeated) { byId.get(node.id)!.repeat = true; repeats++; }
+
+    if (node.value > 1) {
+      shot(
+        repeated ? `fib(${node.value}) again — already computed once.` : `Call fib(${node.value}).`,
+        repeated ? "This whole subtree is recomputed from scratch." : `It needs fib(${node.value - 1}) and fib(${node.value - 2}).`,
+        "recurse", repeated ? "Repeated work" : "Call", [node.id],
+      );
+      walk(node.kids[0]);
+      walk(node.kids[1]);
+      node.result = node.kids[0].result + node.kids[1].result;
+    } else {
+      node.result = node.value;
+    }
+
+    byId.get(node.id)!.badge = String(node.result);
+    settled.push(node.id);
+    shot(
+      node.value <= 1 ? `fib(${node.value}) is a base case; return ${node.result}.` : `fib(${node.value}) returns ${node.result}.`,
+      node.value <= 1 ? "A base case stops the recursion on this branch." : `${node.kids[0].result} + ${node.kids[1].result} = ${node.result}.`,
+      node.value <= 1 ? "base" : "return",
+      node.value <= 1 ? "Base case" : "Return",
+      [node.id],
+    );
+    // Popped only after the frame is drawn, so a returning call is still shown
+    // on the stack at the moment it returns — the way a debugger shows it.
+    stack.pop();
+  };
+  walk(root);
+
+  shot(
+    `fib(${n}) = ${root.result}.`,
+    repeats
+      ? `${nodes.length} calls for ${n + 1} distinct values — ${repeats} subtree${repeats === 1 ? "" : "s"} recomputed.`
+      : "The call tree is fully resolved.",
+    "done", "Complete", [],
+  );
+
+  const lanes = Math.max(...nodes.map(node => node.depth)) + 1;
+  for (const frame of frames) { frame.lanes = lanes; frame.cols = Math.max(1, leaf - 1); }
   return frames;
 }
 
@@ -410,5 +509,6 @@ export function buildSimulation(algorithm: AlgorithmDefinition, raw: string, var
   if (algorithm.id === "quick-sort") return quickTrace(raw);
   if (algorithm.structure === "tree") return treeTrace(algorithm, raw, variant);
   if (algorithm.structure === "graph") return graphTrace(algorithm, raw);
-  return recursionTrace(algorithm, raw);
+  if (algorithm.id === "factorial") return factorialTrace(raw);
+  return fibonacciTrace(raw);
 }

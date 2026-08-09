@@ -125,8 +125,8 @@ if (algorithm.id === "selection-sort") return selectionTrace(raw);
 - [ ] Mutate your working `items` array freely; `snapshot()` copies it.
 - [ ] Every `codeKey` you emit exists in the sample's `highlights`.
 - [ ] Fall back to a default dataset when `parseInput` returns nothing.
-- [ ] Keep the frame count reasonable — cap expensive expansions the way
-      `fibonacciTrace` caps at 16.
+- [ ] Keep the frame count reasonable — clamp the input instead of truncating
+      a trace part-way, which would leave the lesson without a result.
 - [ ] Populate `pointers` / `frontier` / `visited` / `distances` when they help;
       they drive the LIVE STATE panel for free.
 
@@ -136,8 +136,11 @@ Adding a fifth `StructureKind` (say `"matrix"`) means:
 
 1. Extend the `StructureKind` union in `algorithmData.ts`.
 2. Add a branch to `layoutPosition()` in `CubeStage.tsx` returning an
-   `{ x, y }` per item in the 660×360 logical stage.
-3. Add a branch to `rebuildLinks()` if the structure has visible connections.
+   `{ x, y }` per item in the 660×360 logical stage — or skip this entirely by
+   giving items a `lane`/`col` (and optionally `parent`), which reuses the
+   built-in tree layout, auto-sizing and link drawing.
+3. Give items a `parent` if the structure has visible connections; links are
+   drawn from that automatically.
 4. Add a dispatch branch in `buildSimulation`.
 
 Use `item.slot` (rather than array index) when the visual position should be

@@ -33,24 +33,24 @@ export const recursionSamples: RawSamples = {
     typescript: `
 §setup§function fibonacci(n: number): number {
 §base§  if (n <= 1) return n;
-§recurse,done§  return fibonacci(n - 1) + fibonacci(n - 2);
+§recurse,return,done§  return fibonacci(n - 1) + fibonacci(n - 2);
 }`,
     python: `
 §setup§def fibonacci(n):
 §base§    if n <= 1:
 §base§        return n
-§recurse,done§    return fibonacci(n - 1) + fibonacci(n - 2)`,
+§recurse,return,done§    return fibonacci(n - 1) + fibonacci(n - 2)`,
     go: `
 §setup§func fibonacci(n int) int {
 §base§    if n <= 1 {
 §base§        return n
     }
-§recurse,done§    return fibonacci(n - 1) + fibonacci(n - 2)
+§recurse,return,done§    return fibonacci(n - 1) + fibonacci(n - 2)
 }`,
     java: `
 §setup§static int fibonacci(int n) {
 §base§    if (n <= 1) return n;
-§recurse,done§    return fibonacci(n - 1) + fibonacci(n - 2);
+§recurse,return,done§    return fibonacci(n - 1) + fibonacci(n - 2);
 }`,
   },
 };

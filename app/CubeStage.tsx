@@ -14,7 +14,7 @@ const graphPositions: Record<string, { x: number; y: number }> = {
 
 // Horizontal spread of a lane-based (divide-and-conquer) layout, measured once
 // per frame so split runs keep a consistent scale as they fan out.
-type Spread = { count: number; min: number; max: number; laned: boolean; lanes: number };
+type Spread = { count: number; min: number; max: number; laned: boolean; lanes: number; size: number; span: number };
 
 function measure(frame: SimFrame): Spread {
   let min = Infinity, max = -Infinity, laned = false;
@@ -24,30 +24,35 @@ function measure(frame: SimFrame): Spread {
     min = Math.min(min, item.col);
     max = Math.max(max, item.col);
   }
-  return { count: frame.items.length, min, max, laned, lanes: Math.max(1, frame.lanes ?? 1) };
+  const lanes = Math.max(1, frame.lanes ?? 1);
+  // Cubes shrink to fit a dense tree rather than overlapping each other. The
+  // span comes from the trace-wide `cols` so scale never changes mid-trace.
+  const span = Math.max(1, frame.cols ?? (max - min));
+  const size = laned
+    ? Math.round(Math.max(28, Math.min(HALF * 2, pitchFor(span) - 6, laneHeightFor(lanes) - 8)))
+    : HALF * 2;
+  return { count: frame.items.length, min, max, laned, lanes, size, span };
 }
 
+const pitchFor = (span: number) => Math.min(66, 592 / Math.max(1, span));
+// Deep trees are kept clear of the caption strip along the bottom of the stage.
+const laneHeightFor = (lanes: number) => Math.min(58, 190 / Math.max(1, lanes - 1));
+const laneTopFor = (lanes: number) => 150 - (lanes - 1) * laneHeightFor(lanes) / 2;
+
 function layoutPosition(algorithm: AlgorithmDefinition, item: SimFrame["items"][number], index: number, spread: Spread) {
-  if (algorithm.structure === "graph") return graphPositions[item.id] ?? { x: STAGE_W / 2, y: STAGE_H / 2 };
-  if (algorithm.structure === "recursion") {
-    const pitch = spread.count > 1 ? Math.min(44, 264 / (spread.count - 1)) : 0;
-    return { x: STAGE_W / 2 + (index - (spread.count - 1) / 2) * 10, y: 320 - index * pitch };
+  if (item.lane !== undefined && item.col !== undefined) {
+    // Lane 0 is the top row. Merge sort pushes split halves one lane deeper and
+    // lifts merged runs back up; recursion puts each call at its own depth. The
+    // block is sized from the trace-wide lane count so rows never drift.
+    const pitch = pitchFor(spread.span);
+    const middle = (spread.min + spread.max) / 2;
+    return { x: STAGE_W / 2 + (item.col - middle) * pitch, y: laneTopFor(spread.lanes) + item.lane * laneHeightFor(spread.lanes) };
   }
+  if (algorithm.structure === "graph") return graphPositions[item.id] ?? { x: STAGE_W / 2, y: STAGE_H / 2 };
   if (algorithm.structure === "tree") {
     const slot = item.slot ?? index, level = Math.floor(Math.log2(slot + 1));
     const place = slot - (2 ** level - 1), width = 560 / 2 ** level;
     return { x: STAGE_W / 2 + (place - (2 ** level - 1) / 2) * width, y: 70 + level * 84 };
-  }
-  if (item.lane !== undefined && item.col !== undefined) {
-    // Lane 0 is the top row; each split pushes its halves one lane deeper and
-    // each merge lifts the finished run back up. The block is sized from the
-    // trace-wide lane count so rows never drift as the recursion deepens.
-    const span = Math.max(1, spread.max - spread.min);
-    const pitch = Math.min(66, 592 / span);
-    const middle = (spread.min + spread.max) / 2;
-    const laneHeight = Math.min(66, 248 / Math.max(1, spread.lanes - 1));
-    const top = STAGE_H / 2 - (spread.lanes - 1) * laneHeight / 2;
-    return { x: STAGE_W / 2 + (item.col - middle) * pitch, y: top + item.lane * laneHeight };
   }
   return { x: STAGE_W / 2 + (index - (spread.count - 1) / 2) * 66, y: 190 };
 }
@@ -83,16 +88,19 @@ export function CubeStage({ algorithm, frame }: { algorithm: AlgorithmDefinition
   }, []);
 
   useLayoutEffect(() => {
+    const half = measure(frame).size / 2;
     const apply = (el: HTMLDivElement, record: CubeRecord) => {
-      el.style.transform = `translate(${record.x - HALF}px, ${record.y - HALF}px) scale(${record.sx}, ${record.sy})`;
+      el.style.transform = `translate(${record.x - half}px, ${record.y - half}px) scale(${record.sx}, ${record.sy})`;
     };
     for (const [id, record] of records.current) {
       if (!els.current.has(id)) { cancelAnimationFrame(record.raf); records.current.delete(id); }
     }
     const spread = measure(frame);
+    inner.current?.style.setProperty("--cube-size", `${spread.size}px`);
+    const lift = Math.min(LIFT, spread.size * .46);
     const targets = new Map(frame.items.map((item, index) => {
       const position = layoutPosition(algorithm, item, index, spread);
-      return [item.id, { x: position.x, y: position.y - (frame.active.includes(item.id) ? LIFT : 0) }] as const;
+      return [item.id, { x: position.x, y: position.y - (frame.active.includes(item.id) ? lift : 0) }] as const;
     }));
 
     // Cubes exchanging positions travel on opposing arcs: the right-mover goes
@@ -212,6 +220,18 @@ export function CubeStage({ algorithm, frame }: { algorithm: AlgorithmDefinition
       links.push(<line key={item.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />);
     });
   }
+  // Explicit parent links (recursion call trees). A branch lights up once the
+  // child has been called, and turns settled once it has returned.
+  frame.items.forEach((item, index) => {
+    if (!item.parent) return;
+    const parentIndex = frame.items.findIndex(candidate => candidate.id === item.parent);
+    if (parentIndex < 0) return;
+    const a = layoutPosition(algorithm, frame.items[parentIndex], parentIndex, spread);
+    const b = layoutPosition(algorithm, item, index, spread);
+    const className = frame.settled.includes(item.id) ? "path"
+      : frame.dimmed.includes(item.id) ? "faint" : "active";
+    links.push(<line key={`link-${item.id}`} className={className} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />);
+  });
 
   return <div className="sim-stage" ref={host} aria-label={`${algorithm.title} simulation`}>
     <div className="sim-inner" ref={inner}>
@@ -227,6 +247,7 @@ export function CubeStage({ algorithm, frame }: { algorithm: AlgorithmDefinition
           frame.dimmed.includes(item.id) ? "dim" : "",
           item.label.length > 2 ? "long" : "",
           frame.path?.includes(item.id) ? "onpath" : "",
+          item.repeat ? "repeat" : "",
         ].filter(Boolean).join(" ")}>
         <span>{item.label}</span>
         {item.badge !== undefined && <i className="sim-badge">{item.badge}</i>}
