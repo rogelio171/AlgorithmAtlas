@@ -330,24 +330,30 @@ function dijkstraTrace(items: CubeItem[], start: string, end: string) {
     for (const item of items) item.badge = Number.isFinite(distances[item.id]) ? String(distances[item.id]) : "\u221e";
   };
   stamp();
-  const frames = [snapshot(items, `Find the shortest path ${start} \u2192 ${end}.`, `${start} starts at 0; every other cube starts at \u221e.`, "setup", "Initialize", [start], [], [], { distances: { ...distances } })];
+  // The queue Dijkstra actually picks from: reachable but not yet settled,
+  // nearest first. Seeing it makes "settle the closest" a visible choice.
+  const queue = () => graphNodes
+    .filter(node => !settled.has(node) && Number.isFinite(distances[node]))
+    .sort((a, b) => distances[a] - distances[b])
+    .map(node => `${node} ${distances[node]}`);
+  const frames = [snapshot(items, `Find the shortest path ${start} \u2192 ${end}.`, `${start} starts at 0; every other cube starts at \u221e.`, "setup", "Initialize", [start], [], [], { distances: { ...distances }, frontier: queue() })];
 
   while (settled.size < graphNodes.length) {
     const node = graphNodes.filter(candidate => !settled.has(candidate)).sort((a, b) => distances[a] - distances[b])[0];
     if (!node || !Number.isFinite(distances[node])) break;
     settled.add(node);
     stamp();
-    frames.push(snapshot(items, `Settle ${node} at distance ${distances[node]}.`, node === end ? `${end} is settled, so its distance is final.` : "This is the closest unsettled cube; its distance can no longer improve.", "settle", "Settle", [node], [...settled], [], { distances: { ...distances }, visited: [...settled] }));
+    frames.push(snapshot(items, `Settle ${node} at distance ${distances[node]}.`, node === end ? `${end} is settled, so its distance is final.` : "This is the closest unsettled cube; its distance can no longer improve.", "settle", "Settle", [node], [...settled], [], { distances: { ...distances }, visited: [...settled], frontier: queue() }));
     if (node === end) break;
     for (const [next, weight] of adjacency[node]) {
       if (settled.has(next)) continue;
       const candidate = distances[node] + weight;
-      frames.push(snapshot(items, `Test ${node} \u2192 ${next} (${weight}).`, `Candidate: ${distances[node]} + ${weight} = ${candidate} vs ${Number.isFinite(distances[next]) ? distances[next] : "\u221e"}.`, "relax", "Relax edge", [node, next], [...settled], [], { distances: { ...distances }, visited: [...settled] }));
+      frames.push(snapshot(items, `Test ${node} \u2192 ${next} (${weight}).`, `Candidate: ${distances[node]} + ${weight} = ${candidate} vs ${Number.isFinite(distances[next]) ? distances[next] : "\u221e"}.`, "relax", "Relax edge", [node, next], [...settled], [], { distances: { ...distances }, visited: [...settled], frontier: queue() }));
       if (candidate < distances[next]) {
         distances[next] = candidate;
         previous[next] = node;
         stamp();
-        frames.push(snapshot(items, `Update ${next} to ${candidate}.`, `A shorter route reaches ${next} through ${node}.`, "update", "Update distance", [next], [...settled], [], { distances: { ...distances }, visited: [...settled] }));
+        frames.push(snapshot(items, `Update ${next} to ${candidate}.`, `A shorter route reaches ${next} through ${node}.`, "update", "Update distance", [next], [...settled], [], { distances: { ...distances }, visited: [...settled], frontier: queue() }));
       }
     }
   }
@@ -359,16 +365,24 @@ function dijkstraTrace(items: CubeItem[], start: string, end: string) {
       if (at === start) break;
     }
   }
+  // Stopping at the target leaves cubes the search never needed. Dim them so
+  // the ending reads as deliberate pruning rather than an unfinished run.
+  const skipped = graphNodes.filter(node => !settled.has(node));
   // Rebuild the answer hop by hop instead of just asserting it.
   for (let index = path.length - 1; index > 0; index--) {
     const hop = path.slice(index - 1);
-    frames.push(snapshot(items, `${path[index]} was reached from ${path[index - 1]}.`, `Step back through the recorded predecessors: ${hop.join(" \u2192 ")}.`, "path", "Trace back", [path[index], path[index - 1]], [...settled], [], { distances: { ...distances }, path: hop, visited: [...settled] }));
+    frames.push(snapshot(items, `${path[index]} was reached from ${path[index - 1]}.`, `Step back through the recorded predecessors: ${hop.join(" \u2192 ")}.`, "path", "Trace back", [path[index], path[index - 1]], [...settled], skipped, { distances: { ...distances }, path: hop, visited: [...settled] }));
   }
   const resolved = path.length > 1;
+  const pruned = skipped.length
+    ? ` Stopped as soon as ${end} settled, so ${skipped.join(", ")} never had to be explored.`
+    : "";
   frames.push(snapshot(items,
     resolved ? `Shortest path: ${path.join(" \u2192 ")}.` : `${end} is unreachable from ${start}.`,
-    resolved ? `Total distance ${distances[end]}, along the highlighted edges.` : "No route exists in this graph.",
-    "done", "Result", resolved ? path : [], [...settled], [], { distances, path, visited: [...settled] }));
+    resolved
+      ? `Total distance ${distances[end]} along the highlighted edges.${pruned}`
+      : "No route exists in this graph.",
+    "done", "Result", resolved ? path : [], [...settled], skipped, { distances, path, visited: [...settled] }));
   return frames;
 }
 

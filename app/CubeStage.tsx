@@ -195,17 +195,22 @@ export function CubeStage({ algorithm, frame }: { algorithm: AlgorithmDefinition
 
   const spread = measure(frame);
   const links: React.ReactNode[] = [];
+  const weighted = algorithm.id === "dijkstra";
   if (algorithm.structure === "graph") {
     const onPath = new Set<string>();
     for (let index = 1; index < (frame.path?.length ?? 0); index++) {
       onPath.add([frame.path![index - 1], frame.path![index]].sort().join("-"));
     }
-    for (const [from, to] of graphEdges) {
+    for (const [from, to, weight] of graphEdges) {
       const a = graphPositions[from], b = graphPositions[to];
       const key = [from, to].sort().join("-");
       const className = onPath.has(key) ? "path"
         : frame.active.includes(from) && frame.active.includes(to) ? "active" : "";
       links.push(<line key={`${from}-${to}`} className={className} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />);
+      // Weights are the whole point of a shortest-path lesson, so label them.
+      if (weighted) {
+        links.push(<text key={`w-${from}-${to}`} className={className} x={(a.x + b.x) / 2} y={(a.y + b.y) / 2}>{weight}</text>);
+      }
     }
   }
   if (algorithm.structure === "tree") {

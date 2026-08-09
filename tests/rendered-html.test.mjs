@@ -47,3 +47,14 @@ test("the stage animates with eased arcs, squash, and a reduced-motion path", as
   assert.match(stage, /arcOf/);
   assert.doesNotMatch(stage, /\bthree\b/);
 });
+
+test("the weighted graph draws its edge weights", async () => {
+  const [stage, css] = await Promise.all([
+    readFile(new URL("../app/CubeStage.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  // Without weights on the edges, "shortest" cannot be verified by eye.
+  assert.match(stage, /const \[from, to, weight\] of graphEdges/);
+  assert.match(stage, /<text[^>]*>\{weight\}<\/text>/);
+  assert.match(css, /\.sim-links text\{/);
+});

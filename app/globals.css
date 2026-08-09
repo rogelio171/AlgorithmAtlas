@@ -73,6 +73,9 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .sim-links line.active{stroke:var(--hi);stroke-width:3;opacity:1}
 .sim-links line.path{stroke:var(--ok);stroke-width:5;opacity:1;stroke-linecap:round}
 .sim-links line.faint{stroke:var(--line);opacity:.22}
+.sim-links text{fill:var(--muted);font-family:var(--mono);font-weight:700;font-size:13px;text-anchor:middle;dominant-baseline:central;paint-order:stroke;stroke:var(--deep);stroke-width:5px;stroke-linejoin:round;transition:fill .3s var(--ease)}
+.sim-links text.path{fill:var(--ok)}
+.sim-links text.active{fill:var(--hi)}
 .sim-cube{position:absolute;left:0;top:0;width:var(--cube-size);height:var(--cube-size);display:grid;place-items:center;transform-origin:50% 50%;border-radius:calc(var(--radius-sm) + 2px);background:linear-gradient(180deg,color-mix(in srgb,var(--cube) 78%,#fff),var(--cube) 58%);box-shadow:inset 0 0 0 1px var(--cube-edge);color:var(--cube-ink);font-family:var(--mono);font-weight:700;font-size:calc(var(--cube-size) * .34);transition:background .3s var(--ease),box-shadow .3s var(--ease),color .3s var(--ease),opacity .3s var(--ease)}
 .sim-cube.long{font-size:calc(var(--cube-size) * .25)}
 .sim-cube.repeat{box-shadow:0 0 0 2px var(--accent-2),0 0 16px color-mix(in srgb,var(--accent-2) 45%,transparent)}

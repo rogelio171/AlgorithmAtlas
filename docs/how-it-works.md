@@ -113,7 +113,12 @@ six array algorithms, then by `algorithm.structure` for the rest:
   Once the target settles it stops, then walks the predecessor chain backwards
   with one `path` frame per hop and ends on a `done` frame carrying the full
   path and its total distance. Every cube wears its current best distance as a
-  badge, and `distances`/`path` ride along on the frames.
+  badge, **edge weights are drawn on the graph** (with the path's weights
+  highlighted, so the total can be checked by eye), and `frontier` carries the
+  live priority queue — reachable-but-unsettled nodes, nearest first. Because
+  it stops at the target, nodes the search never needed are **dimmed** on the
+  closing frames and named in the caption, so an early exit reads as pruning
+  rather than an unfinished run.
 - **Factorial** — a real call stack. Each call pushes a frame one lane deeper;
   the base case stops the descent; then the stack unwinds, and each frame gets
   its returned value as a badge (`f(3)` → 6) as it resolves. Frames are never

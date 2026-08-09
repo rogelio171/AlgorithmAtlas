@@ -127,6 +127,35 @@ test("dijkstra reports the shortest path to the requested target", () => {
   assert.equal(other.distances.E, 3);
 });
 
+test("dijkstra shows its priority queue and accounts for every node", () => {
+  const algorithm = algorithms.find(item => item.id === "dijkstra");
+
+  // The queue it picks from is visible, and always nearest-first.
+  const trace = buildSimulation(algorithm, "A | F", "");
+  const queues = trace.map(frame => frame.frontier).filter(queue => queue?.length);
+  assert.ok(queues.length > 3, "the priority queue is never shown");
+  for (const queue of queues) {
+    const distances = queue.map(entry => Number(entry.split(" ")[1]));
+    assert.deepEqual(distances, [...distances].sort((a, b) => a - b), `queue out of order: ${queue}`);
+  }
+
+  // Stopping early must be explained, not left looking unfinished: every node
+  // is either settled or visibly dimmed, never abandoned as plain "pending".
+  for (const preset of algorithm.presets) {
+    const last = buildSimulation(algorithm, preset.value, "").at(-1);
+    const accounted = new Set([...last.settled, ...last.dimmed]);
+    for (const item of last.items) {
+      assert.ok(accounted.has(item.id), `${preset.label}: ${item.id} left unresolved`);
+    }
+    if (last.dimmed.length) assert.match(last.detail, /never had to be explored/);
+  }
+
+  // A short run really does skip work — that is the point of the early exit.
+  const short = buildSimulation(algorithm, "B | E", "").at(-1);
+  assert.deepEqual(short.dimmed.sort(), ["A", "C", "D", "F"]);
+  assert.deepEqual(short.settled.sort(), ["B", "E"]);
+});
+
 test("breadth-first search numbers the cubes in visit order", () => {
   const algorithm = algorithms.find(item => item.id === "bfs");
   const last = buildSimulation(algorithm, "A", "").at(-1);
